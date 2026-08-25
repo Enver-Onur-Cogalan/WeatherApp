@@ -62,6 +62,16 @@ rank windows by mean score, length, and proximity to preferred hours
 Pure functions, fully unit-tested, no model involved. The output is a ranked list of
 windows with their scores and the reason each lost points.
 
+**A warning from the first run.** Scoring the committed fixture with only the comfort
+terms — temperature, wind, precipitation, UV — declared 03:00 the best hour of the week
+for a run. Nights are cool and calm, so they score perfectly. `preferred_hours` was
+present in `ActivityProfile` and absent from the formula: the schema was right and the
+engine was incomplete.
+
+The lesson is not about that one term. Every field in the profile needs a corresponding
+term in the scoring function, and the only way to know one is missing is to run the engine
+over real data and read the answer.
+
 ### Synthesis
 
 Only at the end does the model receive the ranked windows and produce prose:

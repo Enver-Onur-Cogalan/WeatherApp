@@ -36,3 +36,5 @@ reversed — and why — is more valuable than a tidy folder.
 | [0009](./ADR-0009-jwt-auth-with-guest-mode.md) | JWT authentication with a guest mode | Accepted | 2026-08-21 |
 | [0010](./ADR-0010-ollama-on-host-for-apple-silicon.md) | Ollama on the host on Apple Silicon | Accepted | 2026-08-21 |
 | [0011](./ADR-0011-gguf-engine-over-mlx.md) | GGUF engine over MLX, for schema enforcement | Accepted | 2026-08-25 |
+| [0012](./ADR-0012-instrument-visual-direction.md) | Instrument as the visual direction | Accepted | 2026-08-25 |
+| [0013](./ADR-0013-data-driven-atmosphere.md) | Atmosphere as a second reading, not decoration | Accepted | 2026-08-25 |

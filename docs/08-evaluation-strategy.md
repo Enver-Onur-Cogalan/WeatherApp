@@ -68,6 +68,13 @@ forbid:
 Forecast data comes from **recorded fixtures**, not live API calls. Evaluations must be
 reproducible; a suite whose results change with the weather is not a suite.
 
+**Fixtures must cover bad weather.** The first one — an August week in Istanbul — turned
+out to be bone dry: 72 hours without a single drop of rain. An agent exercised only in
+fair weather is untested for exactly the cases users most need it in, and the gap was
+invisible until something tried to render precipitation and found none.
+`fixtures/rize.json` was added for rain and heavy cloud. Wind, freezing, and heatwave
+fixtures are still missing, and the suite is incomplete until they exist.
+
 ## Running
 
 | When | What runs | Duration target |

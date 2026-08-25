@@ -16,7 +16,7 @@ maintaining two native projects by hand.
 | Client state | Zustand | Small surface, no boilerplate, no provider tree |
 | Persistence | `expo-sqlite` + Drizzle | Typed queries over a real database; the offline cache is not a key-value blob |
 | Animation | Reanimated 3 + Gesture Handler | Runs on the UI thread; required for the timeline scrubber to stay smooth |
-| Drawing | Skia | Gradient sky, particle precipitation, custom charts |
+| Drawing | Skia | The comfort trace, and the atmosphere layer as SkSL runtime shaders |
 | Styling | Unistyles | Theme and dark mode handled centrally, no runtime class parsing |
 | Secure storage | `expo-secure-store` | Refresh token belongs in Keychain / Keystore, not in AsyncStorage |
 | Builds | EAS Build | Produces a downloadable artifact from CI without a local toolchain |
@@ -55,9 +55,20 @@ These are commitments, not aspirations — they are the reason for several libra
 choices above.
 
 - The timeline scrubber runs on the UI thread. No `setState` per frame.
-- Weather particle effects are drawn in Skia, not composed from views.
+- The sky and precipitation are Skia runtime shaders (SkSL) with uniforms driven by
+  Reanimated shared values, not particle views. Scrubbing never crosses the bridge.
 - Lists are virtualised. The hourly view can hold 168 entries (seven days) without
   degrading.
+
+## Visual direction
+
+The design language is [doc 10](./10-design-language.md); the direction was chosen in
+[ADR-0012](./adr/ADR-0012-instrument-visual-direction.md) and the atmosphere layer's terms
+are set in [ADR-0013](./adr/ADR-0013-data-driven-atmosphere.md).
+
+One consequence belongs here rather than there: the atmosphere layer has a real GPU and
+battery cost, and its quality tier is **not yet designed**. Before this screen is built we
+need a measured figure for a mid-range Android, and an order in which things get dropped.
 
 ## Accessibility and internationalisation
 

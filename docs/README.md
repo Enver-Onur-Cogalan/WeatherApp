@@ -31,13 +31,13 @@ An ADR answers *"why is it like that and not otherwise?"*.
 | 07 | [Authentication and Security](./07-auth-and-security.md) | Accounts, tokens, guest mode, secret handling |
 | 08 | [Evaluation Strategy](./08-evaluation-strategy.md) | How we measure whether the agent actually works |
 | 09 | [Deployment](./09-deployment.md) | Docker topology, and why Apple Silicon is a special case |
+| 10 | [Design Language](./10-design-language.md) | The instrument direction: palette, type, the trace, thirteen weather states |
 | — | [Decision Records](./adr/README.md) | The full index of ADRs |
 
 ## Documents planned but not yet written
 
 These areas have not been decided yet. They will be added as the design settles.
 
-- **Design Language** — typography, colour system, motion principles
 - **Screen Flows** — screen-by-screen breakdown and navigation graph
 - **Data Model** — entities, migrations, sync semantics
 - **Observability** — metrics, tracing, and what we expose publicly
