@@ -15,11 +15,25 @@ maintaining two native projects by hand.
 | Server state | TanStack Query | Caching, retry, and stale-while-revalidate are the offline strategy, already solved |
 | Client state | Zustand | Small surface, no boilerplate, no provider tree |
 | Persistence | `expo-sqlite` + Drizzle | Typed queries over a real database; the offline cache is not a key-value blob |
-| Animation | Reanimated 3 + Gesture Handler | Runs on the UI thread; required for the timeline scrubber to stay smooth |
+| Animation | Reanimated + Gesture Handler | Runs on the UI runtime; required for the timeline scrubber to stay smooth |
 | Drawing | Skia | The comfort trace, and the atmosphere layer as SkSL runtime shaders |
 | Styling | Unistyles | Theme and dark mode handled centrally, no runtime class parsing |
 | Secure storage | `expo-secure-store` | Refresh token belongs in Keychain / Keystore, not in AsyncStorage |
 | Builds | EAS Build | Produces a downloadable artifact from CI without a local toolchain |
+
+## Custom versus native components
+
+The design language is highly specific ([doc 10](./10-design-language.md)), and `@expo/ui`
+offers real SwiftUI and Jetpack Compose components. These pull in opposite directions, so
+the line is drawn once here:
+
+| Surface | Built how | Why |
+|---|---|---|
+| İz, Sor | Custom, from our tokens | The trace, the burn, the verdict typography — this is where the design carries meaning, and a native control would flatten it |
+| Sen, pickers, sheets, form controls | `@expo/ui` native components | A settings screen has no thesis. Platform convention serves the user better than our opinion does |
+
+The rule: **custom where the design says something, native where it would only say
+"we styled this ourselves".**
 
 ## Offline strategy
 
@@ -54,7 +68,9 @@ discover it late.
 These are commitments, not aspirations — they are the reason for several library
 choices above.
 
-- The timeline scrubber runs on the UI thread. No `setState` per frame.
+- The timeline scrubber runs on the UI runtime. No `setState` per frame, and nothing
+  scheduled back to the RN runtime inside `onUpdate` — that fires 60–120 times a second.
+  Threshold work belongs in `onEnd` or a `useAnimatedReaction`.
 - The sky and precipitation are Skia runtime shaders (SkSL) with uniforms driven by
   Reanimated shared values, not particle views. Scrubbing never crosses the bridge.
 - Lists are virtualised. The hourly view can hold 168 entries (seven days) without

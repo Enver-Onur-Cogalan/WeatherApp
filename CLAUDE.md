@@ -48,6 +48,20 @@ English, plain prose, no bullet-point summaries of the diff. Explain what change
 **why it changed** — especially anything that surprised us or reversed an earlier
 decision. Body wrapped at 76 characters.
 
+## Expo skills
+
+The `expo` plugin is installed and its skills are authoritative for mobile work. Route
+through `expo-overview` first; it maps a goal to the right leaf skill. The ones this
+project touches: `expo-project-structure`, `expo-router`, `expo-native-ui`, `expo-ui`,
+`expo-design-system`, `expo-animation`, `expo-data-fetching`, `expo-module` (the widget
+config plugin), `expo-dev-client`.
+
+Two rules from those skills that are easy to get wrong:
+
+- Install with `npx expo install <pkg>`, never raw `npm add` — it keeps versions matched
+  to the SDK.
+- Read version-pinned Expo docs (`/versions/vNN.0.0/`), not `/versions/latest/`.
+
 ## Stack
 
 | | |
