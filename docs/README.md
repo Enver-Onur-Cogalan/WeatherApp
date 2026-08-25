@@ -33,13 +33,13 @@ An ADR answers *"why is it like that and not otherwise?"*.
 | 09 | [Deployment](./09-deployment.md) | Docker topology, and why Apple Silicon is a special case |
 | 10 | [Design Language](./10-design-language.md) | The instrument direction: palette, type, the trace, thirteen weather states |
 | 11 | [Screen Flows](./11-screen-flows.md) | Navigation graph, every screen, and how the app is entered from outside |
+| 12 | [Data Model](./12-data-model.md) | Entities, the shared contract, sync semantics, migrations |
 | — | [Decision Records](./adr/README.md) | The full index of ADRs |
 
 ## Documents planned but not yet written
 
 These areas have not been decided yet. They will be added as the design settles.
 
-- **Data Model** — entities, migrations, sync semantics
 - **Observability** — metrics, tracing, and what we expose publicly
 
 ## Conventions used in these documents

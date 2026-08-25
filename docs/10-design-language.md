@@ -139,6 +139,13 @@ lit crown.
 wind sets angle and drift, cloud cover sets deck type and opacity, and the sun's real
 elevation moves the gradient.
 
+The specimen selects the state from precipitation and cloud cover, which is enough to
+demonstrate the idea and **not** enough to ship: those two cannot tell snow from rain, or
+hail from a shower. Open-Meteo returns a WMO `weather_code` that can, and the mapping from
+code to state is in [doc 12](./12-data-model.md). Extreme heat, extreme cold and windy stay
+threshold-based, since they are not WMO conditions — they modify whatever the code says
+rather than replacing it.
+
 ## Motion
 
 Three moments. Everything else holds still.
