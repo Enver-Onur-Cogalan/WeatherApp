@@ -1,0 +1,102 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_forecast",
+        "description": "Get the weather forecast for a location and date range.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string", "description": "City name"},
+            "start_date": {"type": "string", "description": "YYYY-MM-DD"},
+            "end_date": {"type": "string", "description": "YYYY-MM-DD"}
+          },
+          "required": ["location"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_activity_windows",
+        "description": "Find the best time windows for an outdoor activity.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string", "description": "City name"},
+            "activity": {"type": "string", "description": "e.g. running, cycling"},
+            "days_ahead": {"type": "integer", "description": "How many days to search"}
+          },
+          "required": ["location", "activity"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "compare_days",
+        "description": "Compare the weather between two days for a location.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string", "description": "City name"},
+            "day_a": {"type": "string", "description": "YYYY-MM-DD"},
+            "day_b": {"type": "string", "description": "YYYY-MM-DD"}
+          },
+          "required": ["location", "day_a", "day_b"]
+        }
+      }
+    }
+  ],
+  "plan_schema": {
+    "type": "object",
+    "properties": {
+      "verdict": {"type": "string", "enum": ["good", "mixed", "bad"]},
+      "best_window": {
+        "type": "object",
+        "properties": {
+          "day": {"type": "string"},
+          "start_hour": {"type": "integer"},
+          "end_hour": {"type": "integer"}
+        },
+        "required": ["day", "start_hour", "end_hour"]
+      },
+      "reason": {"type": "string"},
+      "warnings": {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["verdict", "best_window", "reason", "warnings"]
+  },
+  "tool_cases": [
+    {"id": "tr-windows-plain", "lang": "tr",
+     "prompt": "Bu hafta İstanbul'da koşu için en iyi zaman ne zaman?",
+     "expect_tool": "get_activity_windows"},
+    {"id": "tr-windows-casual", "lang": "tr",
+     "prompt": "Cumartesi bisiklete binsem olur mu, İstanbul'dayım.",
+     "expect_tool": "get_activity_windows"},
+    {"id": "tr-forecast-simple", "lang": "tr",
+     "prompt": "İstanbul'da yarın hava nasıl olacak?",
+     "expect_tool": "get_forecast"},
+    {"id": "tr-compare", "lang": "tr",
+     "prompt": "İstanbul'da 22 Ağustos mu 23 Ağustos mu daha sıcak?",
+     "expect_tool": "compare_days"},
+    {"id": "en-windows-plain", "lang": "en",
+     "prompt": "When is the best time to go running in Istanbul this week?",
+     "expect_tool": "get_activity_windows"},
+    {"id": "en-forecast-simple", "lang": "en",
+     "prompt": "What is the weather in Istanbul tomorrow?",
+     "expect_tool": "get_forecast"},
+    {"id": "en-compare", "lang": "en",
+     "prompt": "Is August 22nd warmer than August 23rd in Istanbul?",
+     "expect_tool": "compare_days"},
+    {"id": "tr-indirect", "lang": "tr",
+     "prompt": "Hafta sonu piknik yapmayı düşünüyoruz, İstanbul için ne dersin?",
+     "expect_tool": "get_activity_windows"}
+  ],
+  "schema_cases": [
+    {"id": "schema-tr-running", "lang": "tr",
+     "prompt": "İstanbul'da koşu için en iyi pencere hangisi? Aşağıdaki veriye göre karar ver."},
+    {"id": "schema-en-cycling", "lang": "en",
+     "prompt": "Which is the best cycling window in Istanbul? Decide based on the data below."}
+  ]
+}

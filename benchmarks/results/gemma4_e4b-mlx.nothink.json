@@ -1,0 +1,543 @@
+{
+  "model": "gemma4:e4b-mlx",
+  "repeat": 3,
+  "think": false,
+  "tool_selection": [
+    {
+      "id": "tr-windows-plain",
+      "lang": "tr",
+      "expected": "get_activity_windows",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.564267290999851,
+      "samples": [
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "tr-windows-casual",
+      "lang": "tr",
+      "expected": "get_activity_windows",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.5596278330012865,
+      "samples": [
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "tr-forecast-simple",
+      "lang": "tr",
+      "expected": "get_forecast",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.33891412500088336,
+      "samples": [
+        {
+          "called": [
+            "get_forecast"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_forecast"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_forecast"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "tr-compare",
+      "lang": "tr",
+      "expected": "compare_days",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.8216865000031248,
+      "samples": [
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "en-windows-plain",
+      "lang": "en",
+      "expected": "get_activity_windows",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.5545903339989309,
+      "samples": [
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "en-forecast-simple",
+      "lang": "en",
+      "expected": "get_forecast",
+      "correct_rate": 0.0,
+      "call_rate": 0.0,
+      "median_latency": 0.4306184170018241,
+      "samples": [
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        },
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        },
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        }
+      ]
+    },
+    {
+      "id": "en-compare",
+      "lang": "en",
+      "expected": "compare_days",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.829591583002184,
+      "samples": [
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "tr-indirect",
+      "lang": "tr",
+      "expected": "get_activity_windows",
+      "correct_rate": 0.0,
+      "call_rate": 0.0,
+      "median_latency": 1.283244083999307,
+      "samples": [
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        },
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        },
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        }
+      ]
+    }
+  ],
+  "structured_output": [
+    {
+      "id": "schema-tr-running",
+      "lang": "tr",
+      "valid_rate": 0.0,
+      "sane_hours_rate": 0.0,
+      "median_latency": 10.003667959001177,
+      "samples": [
+        {
+          "valid_json": false,
+          "sane_hours": false,
+          "raw": "Koşu için en iyi pencere, sıcaklığın çok yüksek olmadığı ve UV indeksinin çok yüksek olmadığı bir zamandır.\n\nVerilere bakıldığında, **sabah erken saatler (06:00 civarı)** veya **akşamüstü/akşam (18:00 - 21:00 arası)** daha rahat koşu zamanları gibi görünüyor.\n\n**Önerilerim:**\n\n1. **Sabah Erken (06:00):** Sıcaklık 21.7°C'dir, rüzgar 10.1 km/h'dir ve UV indeksi 0.0'dır. Bu, en serin ve en güvenli se"
+        },
+        {
+          "valid_json": false,
+          "sane_hours": false,
+          "raw": "Koşu için en iyi pencere, sıcaklığın çok yüksek olmadığı ve UV indeksinin çok yüksek olmadığı bir zamandır.\n\nVerilere bakıldığında, **sabah erken saatler (06:00 civarı)** veya **akşamüstü/akşam (18:00 - 21:00 arası)** daha rahat koşu zamanları gibi görünüyor.\n\n**Önerilerim:**\n\n1. **Sabah Erken (06:00):** Sıcaklık 21.7°C'dir ve UV indeksi 0.0'dır. Bu, en serin ve en güvenli zamanlardan biridir.\n2. "
+        },
+        {
+          "valid_json": false,
+          "sane_hours": false,
+          "raw": "Koşu için en iyi pencere, sıcaklığın çok yüksek olmadığı ve UV indeksinin çok yüksek olmadığı bir zaman dilimidir.\n\nVerilere bakıldığında, **sabah erken saatler (06:00 civarı)** veya **akşamüstü/akşam (18:00 - 21:00 arası)** daha rahat koşu zamanları gibi görünüyor.\n\n**Önerilerim:**\n\n1. **Sabah Erken (06:00):**\n    * **Sıcaklık:** 21.7°C (En serin saatlerden biri)\n    * **Yağmur:** %0\n    * **Rüzg"
+        }
+      ]
+    },
+    {
+      "id": "schema-en-cycling",
+      "lang": "en",
+      "valid_rate": 0.0,
+      "sane_hours_rate": 0.0,
+      "median_latency": 9.725372083001275,
+      "samples": [
+        {
+          "valid_json": false,
+          "sane_hours": false,
+          "raw": "Based on the provided data, the \"best\" cycling window depends on whether you prioritize cooler temperatures, lower wind, or less intense sun exposure (UV).\n\nHere is a breakdown:\n\n**For the most comfortable ride (balancing temperature and wind):**\n\n*   **Morning (around 06:00 - 09:00):** The temperatures are cooler (21.7C to 24.4C), and the wind speeds are moderate (10.1 km/h to 14.5 km/h). This is"
+        },
+        {
+          "valid_json": false,
+          "sane_hours": false,
+          "raw": "Based on the provided data, the \"best\" cycling window depends on your preference (e.g., cooler vs. less wind). However, generally, a good cycling window balances moderate temperatures with manageable wind and UV exposure.\n\nHere is an analysis:\n\n**Best Options (Balancing factors):**\n\n*   **Morning (Around 09:00):** The temperature is rising (24.4°C on Aug 21, 24.6°C on Aug 22), the wind is moderate"
+        },
+        {
+          "valid_json": false,
+          "sane_hours": false,
+          "raw": "Based on the provided data, the \"best\" cycling window depends on your preference (e.g., cooler vs. less wind). However, generally, a good cycling window balances moderate temperatures with manageable wind and UV index.\n\nHere is an analysis:\n\n**Best Options (Balancing factors):**\n\n*   **Morning (Around 09:00):** The temperature is rising (24.4°C on Aug 21, 24.6°C on Aug 22), the UV index is moderat"
+        }
+      ]
+    }
+  ],
+  "constraint_tax": [
+    {
+      "id": "tr-windows-plain",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.5541612910019467,
+      "samples": [
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "tr-windows-casual",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.5571090000012191,
+      "samples": [
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "tr-forecast-simple",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.33993583299888996,
+      "samples": [
+        {
+          "called": [
+            "get_forecast"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_forecast"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_forecast"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "tr-compare",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.815550584000448,
+      "samples": [
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "en-windows-plain",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.5545203750007204,
+      "samples": [
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "get_activity_windows"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "en-forecast-simple",
+      "correct_rate": 0.0,
+      "call_rate": 0.0,
+      "median_latency": 0.47043275000032736,
+      "samples": [
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        },
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        },
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        }
+      ]
+    },
+    {
+      "id": "en-compare",
+      "correct_rate": 1.0,
+      "call_rate": 1.0,
+      "median_latency": 0.8124352910017478,
+      "samples": [
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        },
+        {
+          "called": [
+            "compare_days"
+          ],
+          "correct": true,
+          "called_anything": true
+        }
+      ]
+    },
+    {
+      "id": "tr-indirect",
+      "correct_rate": 0.0,
+      "call_rate": 0.0,
+      "median_latency": 1.2072277079969354,
+      "samples": [
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        },
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        },
+        {
+          "called": [],
+          "correct": false,
+          "called_anything": false
+        }
+      ]
+    }
+  ],
+  "language": {
+    "turkish_rate": 1.0,
+    "median_latency": 1.2045142089991714,
+    "samples": [
+      {
+        "turkish": true,
+        "raw": "İstanbul'daki bugünkü hava durumu hakkında bilgi almak için bir araç kullanmam gerekiyor. Lütfen hangi günün hava durumunu öğrenmek istediğinizi belirtin (örneğin, \"bugün\" veya belirli bir tarih)."
+      },
+      {
+        "turkish": true,
+        "raw": "İstanbul'daki bugünkü hava durumu hakkında bilgi almak için bir araç kullanmam gerekiyor. Lütfen hangi günün hava durumunu öğrenmek istediğinizi belirtin (örneğin, \"bugün\" veya belirli bir tarih)."
+      },
+      {
+        "turkish": true,
+        "raw": "İstanbul'daki bugünkü hava durumu hakkında bilgi almak için bir araç kullanmam gerekiyor. Lütfen hangi günün hava durumunu öğrenmek istediğinizi belirtin (örneğin, \"bugün\" veya belirli bir tarih)."
+      }
+    ]
+  },
+  "summary": {
+    "tool_correct_rate": 0.75,
+    "tool_call_rate": 0.75,
+    "schema_valid_rate": 0.0,
+    "schema_sane_hours_rate": 0.0,
+    "constrained_call_rate": 0.75,
+    "constraint_tax": 0.0,
+    "turkish_rate": 1.0,
+    "median_tool_latency": 0.5619475620005687
+  }
+}

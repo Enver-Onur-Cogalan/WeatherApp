@@ -1,0 +1,89 @@
+{
+  "schema": {
+    "type": "object",
+    "properties": {
+      "verdict": {
+        "type": "string",
+        "enum": [
+          "good",
+          "mixed",
+          "bad"
+        ]
+      },
+      "hour": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "verdict",
+      "hour"
+    ]
+  },
+  "prompt": "Istanbul at 6am: 21C, wind 10km/h, no rain. Good for running? Answer with verdict and hour.",
+  "repeat": 3,
+  "models": {
+    "gemma4:e4b": {
+      "conform_rate": 1.0,
+      "median_latency": 1.3874984579961165,
+      "samples": [
+        {
+          "parses": true,
+          "conforms": true,
+          "raw": "{\n  \"verdict\": \"good\",\n  \"hour\": 6\n}"
+        },
+        {
+          "parses": true,
+          "conforms": true,
+          "raw": "{\n  \"verdict\": \"good\",\n  \"hour\": 6\n}"
+        },
+        {
+          "parses": true,
+          "conforms": true,
+          "raw": "{\n  \"verdict\": \"good\",\n  \"hour\": 6\n}"
+        }
+      ]
+    },
+    "gemma4:e4b-mlx": {
+      "conform_rate": 0.0,
+      "median_latency": 0.4239649580049445,
+      "samples": [
+        {
+          "parses": false,
+          "conforms": false,
+          "raw": "**Verdict:** Good. **Hour:** 6am."
+        },
+        {
+          "parses": false,
+          "conforms": false,
+          "raw": "**Verdict:** Good. **Hour:** 6am."
+        },
+        {
+          "parses": false,
+          "conforms": false,
+          "raw": "**Verdict:** Good. **Hour:** 6am."
+        }
+      ]
+    },
+    "llama3.2:1b": {
+      "conform_rate": 1.0,
+      "median_latency": 0.4557894169993233,
+      "samples": [
+        {
+          "parses": true,
+          "conforms": true,
+          "raw": "{\n\n\"verdict\": \"good\",\n\"hour\": 6 }"
+        },
+        {
+          "parses": true,
+          "conforms": true,
+          "raw": "{\n\n\"verdict\": \"good\",\n\"hour\": 6 }"
+        },
+        {
+          "parses": true,
+          "conforms": true,
+          "raw": "{\n\n\"verdict\": \"good\",\n\"hour\": 6 }"
+        }
+      ]
+    }
+  }
+}
