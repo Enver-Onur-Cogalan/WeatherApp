@@ -1,6 +1,15 @@
+import {
+  Archivo_400Regular,
+  Archivo_600SemiBold,
+  useFonts,
+} from "@expo-google-fonts/archivo";
+import { ArchivoBlack_400Regular } from "@expo-google-fonts/archivo-black";
+import { IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
 import { ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import AppTabs from "@/components/app-tabs";
 import { colors } from "@/theme";
@@ -22,18 +31,36 @@ const instrumentTheme = {
     notification: colors.ember,
   },
   fonts: {
-    regular: { fontFamily: "System", fontWeight: "400" as const },
-    medium: { fontFamily: "System", fontWeight: "500" as const },
-    bold: { fontFamily: "System", fontWeight: "700" as const },
-    heavy: { fontFamily: "System", fontWeight: "800" as const },
+    regular: { fontFamily: "Archivo_400Regular", fontWeight: "400" as const },
+    medium: { fontFamily: "Archivo_600SemiBold", fontWeight: "600" as const },
+    bold: { fontFamily: "ArchivoBlack_400Regular", fontWeight: "700" as const },
+    heavy: { fontFamily: "ArchivoBlack_400Regular", fontWeight: "900" as const },
   },
 };
 
 export default function RootLayout() {
+  const [ready, error] = useFonts({
+    Archivo_400Regular,
+    Archivo_600SemiBold,
+    ArchivoBlack_400Regular,
+    IBMPlexMono_500Medium,
+  });
+
+  useEffect(() => {
+    // Hide once the faces are resolved, either way. Holding the splash screen on a
+    // font error would trade a fallback face for a permanently blank app.
+    if (ready || error) SplashScreen.hideAsync();
+  }, [ready, error]);
+
+  if (!ready && !error) return null;
+
   return (
-    <ThemeProvider value={instrumentTheme}>
-      <StatusBar style="light" />
-      <AppTabs />
-    </ThemeProvider>
+    // Gestures do nothing at all without this, and they fail silently.
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.ground }}>
+      <ThemeProvider value={instrumentTheme}>
+        <StatusBar style="light" />
+        <AppTabs />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

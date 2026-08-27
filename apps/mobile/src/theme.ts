@@ -9,6 +9,8 @@
  * Nothing outside this file should contain a colour literal.
  */
 
+import type { TextStyle } from "react-native";
+
 export const colors = {
   /** The sky forty minutes after sunset. Deliberately not black. */
   ground: "#10162A",
@@ -50,38 +52,45 @@ export const radius = {
 } as const;
 
 /**
- * Two families, three roles. Archivo's width axis carries the hierarchy — expanded for
- * a verdict, normal for prose — so no second display face is needed. IBM Plex Mono holds
- * every number, which is functional rather than stylistic: scrubbing updates four values
- * per frame, and proportional digits would make the readout twitch.
+ * Three roles. The display register is wide and heavy, prose is normal, and IBM Plex
+ * Mono holds every number — functional rather than stylistic, since scrubbing updates
+ * four values per frame and proportional digits would make the readout twitch.
+ *
+ * Typed as `TextStyle` so spreading an entry into a `StyleSheet.create` block keeps its
+ * shape; without it the whole sheet collapses to a style union and every consumer of a
+ * plain `View` style stops type-checking.
  */
-export const type = {
+export const type: Record<
+  "display" | "heading" | "body" | "data" | "label",
+  TextStyle
+> = {
   display: {
-    fontFamily: "Archivo_700Bold",
-    fontVariationSettings: '"wdth" 125',
-    letterSpacing: -0.4,
-    textTransform: "uppercase" as const,
+    // docs/10 specified Archivo flexed along its width axis. `@expo-google-fonts`
+    // ships static instances only, and React Native cannot drive `wdth` reliably
+    // across platforms — so the wide register comes from Archivo Black plus positive
+    // tracking instead. Same superfamily, same intent, one file rather than an axis.
+    fontFamily: "ArchivoBlack_400Regular",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
   },
   heading: {
     fontFamily: "Archivo_600SemiBold",
-    fontVariationSettings: '"wdth" 118',
-    textTransform: "uppercase" as const,
+    textTransform: "uppercase",
   },
   body: {
     fontFamily: "Archivo_400Regular",
-    fontVariationSettings: '"wdth" 100',
   },
   data: {
     fontFamily: "IBMPlexMono_500Medium",
-    fontVariant: ["tabular-nums" as const],
+    fontVariant: ["tabular-nums"],
   },
   label: {
     fontFamily: "IBMPlexMono_500Medium",
     fontSize: 10,
     letterSpacing: 1.4,
-    textTransform: "uppercase" as const,
+    textTransform: "uppercase",
   },
-} as const;
+};
 
 export const size = {
   verdict: 30,

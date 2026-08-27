@@ -76,6 +76,13 @@ Two families, three roles.
 wide in a verdict to quiet and normal in running text. No second display face is needed,
 and the bundle stays small.
 
+**What actually shipped, and why it differs.** `@expo-google-fonts` distributes static
+instances rather than the variable font, and React Native cannot drive a `wdth` axis
+reliably across both platforms. The wide register is therefore **Archivo Black** with
+positive tracking — the same superfamily and the same intent, reached with a second file
+instead of an axis. The variable font could be bundled directly later; it was not worth
+the loading complexity to recover a difference this small.
+
 **Monospace is functional, not stylistic.** Dragging the scrubber updates four values per
 frame; proportional digits would make the readout twitch continuously. Every figure in
 the interface carries `tabular-nums`.

@@ -1,19 +1,12 @@
-import { Note, Screen } from "@/components/screen";
+import { TraceScreen } from "@/screens/trace";
 
 /**
- * İz — the main screen, and the planner's output.
+ * İz.
  *
- * Takes location, day, hour and activity as parameters: a widget tap or a rain
- * notification must be able to open the exact hour it is about, so this screen is not
- * allowed hidden state a deep link cannot reach (docs/11).
+ * Route files hold route concerns only. This one will read location, day, hour and
+ * activity from the URL once deep links land — a rain notification has to be able to
+ * open the exact hour it is about (docs/11).
  */
-export default function TraceScreen() {
-  return (
-    <Screen eyebrow="İstanbul" title="İz">
-      <Note>
-        Konfor izi, sıralı pencereler ve saatlik okuma buraya gelecek. Skorlama motoru
-        hazır ve test edilmiş durumda — bu ekran onun çıktısını çiziyor.
-      </Note>
-    </Screen>
-  );
+export default function TraceRoute() {
+  return <TraceScreen />;
 }
