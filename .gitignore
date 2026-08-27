@@ -18,3 +18,23 @@ dist/
 
 # OS
 .DS_Store
+
+# Expo / React Native
+.expo/
+ios/
+android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+expo-env.d.ts
+
+# uv
+uv.lock.bak
+
+# Local model output
+/tmp/ollama-serve.log
+
+# uv virtualenv
+.venv/

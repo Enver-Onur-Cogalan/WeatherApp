@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weatherapp.local/schemas/forecast-hour.json",
+  "title": "ForecastHour",
+  "description": "One normalised hour of forecast. Canonical units only: Celsius, km/h, millimetres, UTC.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["hour_utc", "local_hour", "temperature_c", "precip_prob_pct", "precip_mm", "wind_kmh", "uv_index", "cloud_cover_pct", "weather_code"],
+  "properties": {
+    "hour_utc": { "type": "string", "format": "date-time", "description": "Authoritative timestamp, always UTC." },
+    "local_hour": { "type": "integer", "minimum": 0, "maximum": 23, "description": "Hour of day in the location's timezone. Denormalised because every query needs it." },
+    "temperature_c": { "type": "number" },
+    "precip_prob_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "precip_mm": { "type": "number", "minimum": 0 },
+    "wind_kmh": { "type": "number", "minimum": 0 },
+    "uv_index": { "type": "number", "minimum": 0 },
+    "cloud_cover_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "weather_code": { "type": "integer", "description": "WMO code. The source of truth for which atmosphere state renders — precipitation and cloud cover alone cannot tell snow from rain." }
+  }
+}

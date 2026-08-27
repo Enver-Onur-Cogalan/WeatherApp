@@ -1,0 +1,80 @@
+# Two ways to run this, because Apple Silicon and Linux are genuinely different.
+#
+#   docker compose up                     api + redis + postgres.
+#                                         Ollama runs on the host — containers on macOS
+#                                         have no Metal access, so an Ollama container
+#                                         falls back to CPU and feels broken (ADR-0010).
+#
+#   docker compose --profile bundled up   adds Ollama in a container, for Linux hosts
+#                                         with a GPU. One command, nothing on the host.
+
+services:
+  api:
+    build:
+      context: ./services/api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://weather:weather@postgres:5432/weather
+      REDIS_URL: redis://redis:6379/0
+      # host.docker.internal reaches the host's Ollama on macOS and Windows.
+      # The bundled profile overrides this to the container.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e4b}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env — the service will not start without one}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: weather
+      POSTGRES_PASSWORD: weather
+      POSTGRES_DB: weather
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U weather -d weather"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  ollama:
+    profiles: ["bundled"]
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  ollama-models:

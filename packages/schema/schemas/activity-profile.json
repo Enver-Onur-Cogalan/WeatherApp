@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weatherapp.local/schemas/activity-profile.json",
+  "title": "ActivityProfile",
+  "description": "What a person wants from the weather before they will go outside. Extracted from natural language once, confirmed by the user, then read by the scoring engine on every request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["activity", "temp_min", "temp_max", "wind_max_kmh", "precip_max_pct", "preferred_hours"],
+  "properties": {
+    "activity": {
+      "type": "string",
+      "description": "What the person does outdoors, in one lowercase word.",
+      "enum": ["running", "cycling", "walking", "picnic", "photography", "gardening", "swimming", "other"]
+    },
+    "temp_min": { "type": "integer", "description": "Coldest acceptable temperature in Celsius.", "minimum": -40, "maximum": 50 },
+    "temp_max": { "type": "integer", "description": "Warmest acceptable temperature in Celsius.", "minimum": -40, "maximum": 50 },
+    "wind_max_kmh": { "type": "integer", "description": "Highest acceptable wind speed in km/h.", "minimum": 0, "maximum": 150 },
+    "precip_max_pct": { "type": "integer", "description": "Highest acceptable chance of precipitation, as a percentage.", "minimum": 0, "maximum": 100 },
+    "uv_max": { "type": ["integer", "null"], "description": "Highest acceptable UV index, or null if the person did not say.", "minimum": 0, "maximum": 15 },
+    "preferred_hours": {
+      "type": "array",
+      "description": "The hours of day the person prefers, as [start, end] in local time. Without this term the engine ranks 03:00 as the best hour of the week.",
+      "items": { "type": "integer", "minimum": 0, "maximum": 23 },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

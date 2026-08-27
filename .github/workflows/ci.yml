@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API — lint, types, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-extras --dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Types
+        run: uv run mypy app
+
+      - name: Tests
+        run: uv run pytest -q
+
+  mobile:
+    name: Mobile — types and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Types
+        run: npm run typecheck --workspace apps/mobile
+
+      - name: Lint
+        run: npm run lint --workspace apps/mobile
+
+  schema:
+    name: Schema — generated files are current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Regenerate
+        run: node packages/schema/scripts/generate.mjs
+
+      # The generated Pydantic and Zod files are committed so neither consumer needs
+      # this toolchain to build. That only holds if they are actually kept in step.
+      - name: Fail if regenerating changed anything
+        run: |
+          if ! git diff --quiet; then
+            echo "Generated files are stale. Run 'npm run schema' and commit the result."
+            git diff --stat
+            exit 1
+          fi
+
+  docker:
+    name: Docker — image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/api
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

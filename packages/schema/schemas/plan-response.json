@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weatherapp.local/schemas/plan-response.json",
+  "title": "PlanResponse",
+  "description": "The assistant's answer to a planning question. Every figure in it comes from the scoring engine; the model supplies the sentence, not the facts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "reason", "warnings"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "description": "Whether the conditions suit the activity.",
+      "enum": ["good", "mixed", "bad"]
+    },
+    "best_window": {
+      "$ref": "#/$defs/window",
+      "description": "The highest ranked window, or null when nothing clears the profile."
+    },
+    "reason": {
+      "type": "string",
+      "description": "One or two sentences explaining the verdict, in the language the question was asked in.",
+      "minLength": 1,
+      "maxLength": 400
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Conditions worth flagging even when the verdict is good. Empty when there are none.",
+      "items": { "type": "string", "maxLength": 200 },
+      "maxItems": 4
+    }
+  },
+  "$defs": {
+    "window": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["day", "start_hour", "end_hour", "score"],
+      "properties": {
+        "day": { "type": "string", "description": "Local date as YYYY-MM-DD.", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "start_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "end_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "score": { "type": "number", "description": "Mean comfort score across the window, 0 to 100.", "minimum": 0, "maximum": 100 }
+      }
+    }
+  }
+}
