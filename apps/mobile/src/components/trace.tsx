@@ -114,27 +114,39 @@ export function Trace({ slice, width, height = 190, initialIndex }: Props) {
 
   const pan = Gesture.Pan()
     .onBegin((e) => {
-      index.set(clampIndex(e.x / plot.step, slice.count));
+      index.set(clampIndex(e.x / step, count));
     })
     .onUpdate((e) => {
       // No scheduleOnRN here. At 120 Hz this fires twice a frame, and anything crossing
       // to the RN runtime from inside onUpdate is the classic way to make a drag stutter.
-      index.set(clampIndex(e.x / plot.step, slice.count));
+      index.set(clampIndex(e.x / step, count));
     })
     .onEnd(() => {
       index.set(withSpring(Math.round(index.get()), { duration: 220, dampingRatio: 1 }));
     });
 
-  const scrubX = useDerivedValue(() => index.get() * plot.step);
+  // Worklets capture primitives, never helpers. `y` is an ordinary function built on
+  // the RN runtime with useMemo, and calling it from a worklet throws on device while
+  // working fine in the debugger — so the same mapping is done inline from numbers.
+  const plotTop = plot.top;
+  const plotBottom = plot.bottom;
+  const step = plot.step;
+  const scores = slice.scores;
+  const count = slice.count;
+
+  const scrubX = useDerivedValue(() => index.get() * step);
   const scrubY = useDerivedValue(() => {
-    const at = Math.round(index.get());
-    return y(slice.scores[Math.min(Math.max(at, 0), slice.count - 1)] ?? 0);
+    const at = Math.min(Math.max(Math.round(index.get()), 0), count - 1);
+    const score = scores[at] ?? 0;
+    return plotBottom - (score / 100) * (plotBottom - plotTop);
   });
 
   // Hooks stay at the top level — a `useDerivedValue` inlined into a JSX prop happens
   // to evaluate in a stable order here, but it is a rule violation waiting to bite.
-  const scrubTop = useDerivedValue(() => vec(scrubX.get(), 0));
-  const scrubFoot = useDerivedValue(() => vec(scrubX.get(), plot.bottom + 6));
+  // Plain object literals rather than Skia's `vec`: a helper from another module is one
+  // more thing that has to be worklet-safe, and a Vector is only {x, y}.
+  const scrubTop = useDerivedValue(() => ({ x: scrubX.get(), y: 0 }));
+  const scrubFoot = useDerivedValue(() => ({ x: scrubX.get(), y: plotBottom + 6 }));
   const readout = useReadout(index, slice);
 
   return (
