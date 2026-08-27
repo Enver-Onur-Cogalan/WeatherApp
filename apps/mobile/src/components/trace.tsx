@@ -45,9 +45,19 @@ type Props = {
   initialIndex: number;
   /** The hour happening now within this slice, or null when the day is not today. */
   nowIndex?: number | null;
+  /** Reports the scrubbed hour so the atmosphere can follow it (ADR-0013). Fires on
+   *  hour boundaries only, which is what the reaction below already costs. */
+  onScrub?: (index: number) => void;
 };
 
-export function Trace({ slice, width, height = 168, initialIndex, nowIndex }: Props) {
+export function Trace({
+  slice,
+  width,
+  height = 168,
+  initialIndex,
+  nowIndex,
+  onScrub,
+}: Props) {
   const axisFont = useFont(PLEX, AXIS_SIZE);
   const start = Math.min(Math.max(initialIndex, 0), slice.count - 1);
   const [at, setAt] = useState(start);
@@ -61,7 +71,13 @@ export function Trace({ slice, width, height = 168, initialIndex, nowIndex }: Pr
   );
 
   const index = useSharedValue(start);
-  const commit = useCallback((next: number) => setAt(next), []);
+  const commit = useCallback(
+    (next: number) => {
+      setAt(next);
+      onScrub?.(next);
+    },
+    [onScrub],
+  );
 
   // Renders only when the hour under the finger changes, not on every frame.
   useAnimatedReaction(

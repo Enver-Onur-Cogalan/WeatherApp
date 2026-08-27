@@ -96,6 +96,9 @@ export const SPAN_LABELS: Record<Span, string> = {
  */
 export type TraceSlice = {
   count: number;
+  /** The hours this slice covers, for anything needing a whole hour rather than one of
+   *  the flat arrays — the atmosphere reads the scrubbed one. */
+  hours: ScoredHour[];
   scores: number[];
   localHours: number[];
   temperature: number[];
@@ -138,6 +141,7 @@ export function sliceFor(plan: PlanResult, span: Span, dayOffset = 0): TraceSlic
 
   return {
     count: hours.length,
+    hours,
     scores,
     excluded,
     localHours: hours.map((h) => h.local_hour),

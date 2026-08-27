@@ -52,6 +52,7 @@ export function TraceScreen() {
   const [activity, setActivity] = useState<ActivityKey>("running");
   const [span, setSpan] = useState<Span>("day");
   const [day, setDay] = useState<number | null>(null);
+  const [scrubbed, setScrubbed] = useState<number | null>(null);
 
   const plan = getPlan(activity);
   // Opens on the day the person is actually in, not on the first day of the forecast.
@@ -68,12 +69,16 @@ export function TraceScreen() {
 
   const showDay = (index: number) => {
     setDay(index);
+    setScrubbed(null);
     setSpan("day");
   };
 
   // The sky reflects whichever hour is on screen, so scrubbing changes the weather
   // behind the trace as well as the numbers in front of it (ADR-0013).
-  const atmosphereHour = now ?? plan.hours[0];
+  const atmosphereHour =
+    (span === "day" && scrubbed !== null ? slice.hours[scrubbed] : null) ??
+    now ??
+    plan.hours[0];
 
   return (
     <View style={styles.safe}>
@@ -130,7 +135,10 @@ export function TraceScreen() {
               {days.map((label, index) => (
                 <Pressable
                   key={label + index}
-                  onPress={() => setDay(index)}
+                  onPress={() => {
+                    setDay(index);
+                    setScrubbed(null);
+                  }}
                   hitSlop={6}
                   style={[styles.dayPill, index === selectedDay && styles.dayPillOn]}
                   accessibilityRole="button"
@@ -156,6 +164,7 @@ export function TraceScreen() {
                   ? plan.now_index - today * 24
                   : null
               }
+              onScrub={setScrubbed}
             />
 
             <Text style={styles.legend}>

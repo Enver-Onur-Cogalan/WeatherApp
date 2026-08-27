@@ -2,18 +2,17 @@
  * The atmosphere layer.
  *
  * Weather happens *to* the instrument, not behind it: the sky is the paper the trace is
- * printed on. Ground and figure stay separated — the sky owns the far plane, fades into
- * the app's own ground before the trace begins, and never draws over it.
+ * printed on. Ground and figure stay separated — the sky owns the far plane, becomes the
+ * app's own ground before the trace begins, and never draws over it.
  *
- * ADR-0013 set the terms. Nothing here picks a state from a list; the forecast does.
- * Precipitation sets density, wind sets the angle every drop falls at, cloud cover
- * flattens the light, and the sun's real elevation moves the gradient. That is what
- * makes the layer a second reading of the same data rather than ornament — the only
- * footing an instrument direction would accept it on.
+ * ADR-0013 set the terms. Nothing picks a state from a list; the forecast does.
+ * Precipitation sets density, wind sets the angle drops fall at, cloud cover flattens
+ * the light, and the sun's real elevation moves the gradient — which is what makes the
+ * layer a second reading of the same data rather than ornament.
  *
- * Precipitation is one SkSL fragment shader, not a particle system: hundreds of drops
- * with no per-drop JavaScript, evaluated on the GPU and driven by a clock on the UI
- * runtime. The React tree never re-renders while it rains.
+ * It follows the **scrubbed** hour, not the current one. Dragging the trace changes the
+ * weather behind it as well as the numbers in front, which is the promise the ADR was
+ * written around and the first build quietly failed to keep.
  */
 
 import {
@@ -34,17 +33,17 @@ import { conditionFor, type Condition } from "@/lib/weather-code";
 import { colors } from "@/theme";
 
 /**
- * Rain, snow and hail from one shader, because they differ in physics rather than in
+ * Precipitation and fog from one shader, because they differ in physics rather than in
  * kind: a column grid, a hashed phase per column so nothing falls in lockstep, and a
  * distance field to the falling body. `u_mode` switches that body between a streak, a
- * swaying disc and a hard pellet.
+ * swaying disc, a hard pellet and a drifting sheet.
  */
-const PRECIPITATION = Skia.RuntimeEffect.Make(`
+const WEATHER = Skia.RuntimeEffect.Make(`
 uniform float2 u_resolution;
 uniform float  u_time;
-uniform float  u_intensity;  // 0..1, from precipitation probability
+uniform float  u_intensity;  // 0..1
 uniform float  u_slant;      // -1..1, from wind
-uniform float  u_mode;       // 0 rain, 1 snow, 2 hail
+uniform float  u_mode;       // 0 rain, 1 snow, 2 hail, 3 fog
 uniform float  u_fade;       // fraction of height at which the layer is gone
 
 float hash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -53,7 +52,24 @@ half4 main(float2 xy) {
     if (u_intensity <= 0.001) { return half4(0.0); }
 
     float2 uv = xy / u_resolution.y;
-    float  columns = mix(14.0, 46.0, u_intensity);
+    float  fade = smoothstep(u_fade, u_fade * 0.5, xy.y / u_resolution.y);
+    if (fade <= 0.001) { return half4(0.0); }
+
+    // Fog is sheets, not bodies: slow horizontal bands at different rates, which is
+    // where its depth comes from.
+    if (u_mode > 2.5) {
+        float band = 0.0;
+        for (float i = 0.0; i < 4.0; i += 1.0) {
+            float y = 0.16 + i * 0.13;
+            float drift = fract(u_time * (0.010 + i * 0.006) + i * 0.37);
+            float across = smoothstep(0.30, 0.0, abs(fract(uv.x * 0.6 - drift) - 0.5));
+            band += across * smoothstep(0.075, 0.0, abs(uv.y - y));
+        }
+        float a = clamp(band, 0.0, 1.0) * fade * u_intensity * 0.42;
+        return half4(half3(0.86, 0.89, 0.93) * a, a);
+    }
+
+    float columns = mix(14.0, 46.0, u_intensity);
 
     // Skewing the sampling grid is what makes wind visible: the whole field leans, so
     // drops stay parallel instead of each rotating about its own centre.
@@ -89,11 +105,51 @@ half4 main(float2 xy) {
         body = smoothstep(0.035, 0.012, d);
     }
 
-    // The layer stops before the instrument starts; the trace is never drawn through
-    // weather.
-    float fade = smoothstep(u_fade, u_fade * 0.55, xy.y / u_resolution.y);
-    float alpha = body * fade * (0.30 + 0.45 * u_intensity);
-    return half4(half3(0.82, 0.88, 0.95) * alpha, alpha);
+    float a = body * fade * (0.34 + 0.5 * u_intensity);
+    return half4(half3(0.84, 0.90, 0.97) * a, a);
+}`)!;
+
+/**
+ * Stars.
+ *
+ * Without them a clear night is a flat dark rectangle sitting on a dark ground — which
+ * is exactly what the first build shipped, and why the layer looked like nothing had
+ * been added. Cloud cover puts them out.
+ */
+const STARS = Skia.RuntimeEffect.Make(`
+uniform float2 u_resolution;
+uniform float  u_time;
+uniform float  u_amount;   // 0..1, night times clear sky
+uniform float  u_fade;
+
+float hash21(float2 p) {
+    p = fract(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
+half4 main(float2 xy) {
+    if (u_amount <= 0.01) { return half4(0.0); }
+
+    float2 uv = xy / u_resolution.y;
+    float  cells = 26.0;
+    float2 id = floor(uv * cells);
+    float2 cell = fract(uv * cells);
+
+    float rnd = hash21(id);
+    if (rnd > 0.34) { return half4(0.0); }
+
+    float2 at = float2(hash21(id + 1.7), hash21(id + 4.1));
+    float  d = length(cell - at);
+
+    // Each star keeps its own twinkle rate, so the field never pulses as one.
+    float twinkle = 0.55 + 0.45 * sin(u_time * (0.7 + rnd * 2.2) + rnd * 40.0);
+    float body = smoothstep(0.06, 0.0, d) * twinkle;
+
+    // Stars thin out toward the horizon rather than stopping at a line.
+    float fade = smoothstep(u_fade, u_fade * 0.35, xy.y / u_resolution.y);
+    float a = body * fade * u_amount * 0.9;
+    return half4(half3(0.87, 0.91, 0.99) * a, a);
 }`)!;
 
 /** Fraction of height at which the sky has fully become the app's ground. */
@@ -105,22 +161,26 @@ const MODE: Partial<Record<Condition, number>> = {
   storm: 0,
   snow: 1,
   hail: 2,
+  fog: 3,
 };
 
 type Rgb = [number, number, number];
 
-const NIGHT: Rgb = [11, 16, 32];
-const DAY_TOP: Rgb = [44, 93, 147];
-const NIGHT_LOW: Rgb = [20, 27, 51];
-const DAY_LOW: Rgb = [110, 155, 192];
-const OVERCAST_TOP: Rgb = [33, 39, 57];
-const OVERCAST_LOW: Rgb = [43, 51, 70];
+// Night is pulled away from the app's ground on purpose. The first version derived it
+// from the same corner of the palette, so the sky and the page underneath it were within
+// a few values of each other and the whole layer was invisible after sunset.
+const NIGHT_TOP: Rgb = [7, 10, 24];
+const NIGHT_LOW: Rgb = [30, 41, 74];
+const DAY_TOP: Rgb = [38, 92, 152];
+const DAY_LOW: Rgb = [124, 168, 204];
+const OVERCAST_TOP: Rgb = [40, 46, 62];
+const OVERCAST_LOW: Rgb = [78, 86, 100];
 const BURN: Rgb = [196, 104, 44];
 
 /**
- * Colour maths stays on tuples until the very last step.
+ * Colour maths stays on tuples until the last step.
  *
- * Mixing a value that is already a css string back into another mix is how the first
+ * Mixing a value that is already a css string back into another mix is how an earlier
  * version of this silently produced `NaN` and painted nothing.
  */
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
@@ -134,7 +194,7 @@ const css = (c: Rgb) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const elevation = (hour: number) => Math.max(0, Math.sin(((hour - 6.5) / 13) * Math.PI));
 
 type Props = {
-  /** Local hour on screen, which is what drives the sun's elevation. */
+  /** The hour on screen — scrubbed, not current. */
   localHour: number;
   weatherCode: number;
   precipProbPct: number;
@@ -152,37 +212,47 @@ export function Atmosphere({
   const clock = useClock();
   const [size, setSize] = useState({ width: 0, height: 0 });
 
-  const sky = useMemo(() => {
-    const sun = elevation(localHour);
-    const overcast = cloudCoverPct / 100;
+  const sun = elevation(localHour);
+  const overcast = cloudCoverPct / 100;
 
-    let top = mix(NIGHT, DAY_TOP, sun);
+  const sky = useMemo(() => {
+    let top = mix(NIGHT_TOP, DAY_TOP, sun);
     let low = mix(NIGHT_LOW, DAY_LOW, sun);
-    top = mix(top, OVERCAST_TOP, overcast * 0.72);
+    top = mix(top, OVERCAST_TOP, overcast * 0.7);
     low = mix(low, OVERCAST_LOW, overcast * 0.6);
 
-    // A low sun brings the burn into the horizon band — which is where the palette came
-    // from in the first place (docs/10).
+    // A low sun brings the burn into the horizon band — where the palette came from
+    // in the first place (docs/10).
     if (sun > 0 && sun < 0.34) {
-      low = mix(low, BURN, ((0.34 - sun) / 0.34) * 0.38 * (1 - overcast * 0.5));
+      low = mix(low, BURN, ((0.34 - sun) / 0.34) * 0.45 * (1 - overcast * 0.5));
     }
     return { top: css(top), low: css(low) };
-  }, [localHour, cloudCoverPct]);
+  }, [sun, overcast]);
 
   const condition = conditionFor(weatherCode);
   const mode = MODE[condition];
   const intensity =
     mode === undefined
       ? 0
-      : Math.min(1, precipProbPct / 100 + (condition === "downpour" ? 0.35 : 0));
+      : condition === "fog"
+        ? 0.85
+        : Math.min(1, precipProbPct / 100 + (condition === "downpour" ? 0.35 : 0));
   const slant = Math.max(-0.6, Math.min(0.6, windKmh / 30));
+  const starAmount = Math.max(0, 1 - sun * 6) * Math.max(0, 1 - overcast * 1.35);
 
-  const uniforms = useDerivedValue(() => ({
+  const weatherUniforms = useDerivedValue(() => ({
     u_resolution: [size.width, size.height],
     u_time: clock.get() / 1000,
     u_intensity: intensity,
     u_slant: slant,
     u_mode: mode ?? 0,
+    u_fade: FADE_AT,
+  }));
+
+  const starUniforms = useDerivedValue(() => ({
+    u_resolution: [size.width, size.height],
+    u_time: clock.get() / 1000,
+    u_amount: starAmount,
     u_fade: FADE_AT,
   }));
 
@@ -202,12 +272,19 @@ export function Atmosphere({
               start={vec(0, 0)}
               end={vec(0, size.height * FADE_AT)}
               colors={[sky.top, sky.low, colors.ground]}
-              positions={[0, 0.8, 1]}
+              positions={[0, 0.82, 1]}
             />
           </Fill>
+
+          {starAmount > 0.01 ? (
+            <Rect x={0} y={0} width={size.width} height={size.height}>
+              <Shader source={STARS} uniforms={starUniforms} />
+            </Rect>
+          ) : null}
+
           {intensity > 0 ? (
             <Rect x={0} y={0} width={size.width} height={size.height}>
-              <Shader source={PRECIPITATION} uniforms={uniforms} />
+              <Shader source={WEATHER} uniforms={weatherUniforms} />
             </Rect>
           ) : null}
         </Canvas>
