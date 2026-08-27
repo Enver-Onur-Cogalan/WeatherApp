@@ -27,5 +27,20 @@
       "Bash(docker compose ps:*)",
       "Bash(docker compose logs:*)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r \".tool_response.filePath // .tool_input.file_path // empty\" | { read -r f; case \"$f\" in */services/api/*.py) root=\"${f%%/services/api/*}/services/api\"; \"$root/.venv/bin/ruff\" format \"$f\" && \"$root/.venv/bin/ruff\" check --fix \"$f\";; esac; } > /dev/null || true",
+            "timeout": 30,
+            "statusMessage": "ruff"
+          }
+        ]
+      }
+    ]
   }
 }

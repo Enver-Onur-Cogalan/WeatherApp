@@ -52,6 +52,13 @@ Cache keys are built from rounded coordinates (2 decimal places, roughly 1 km). 
 standing on opposite sides of a street share a cache entry, which is correct — the
 forecast is identical.
 
+**Always key off the coordinates that were requested, never the ones in the response.**
+Open-Meteo snaps coordinates to its model grid: ask for 41.0082, 28.9784 and the reply
+says 41.0, 29.0, which rounds to a different key. The first implementation keyed writes
+off the response, so every write landed somewhere no read would look. There was no error
+and no warning — the cache simply never hit, and every request went upstream. A test
+caught it; nothing else would have, short of noticing the traffic.
+
 ## Observability
 
 - **Structured logging** with a request id propagated from the client, so a user report
