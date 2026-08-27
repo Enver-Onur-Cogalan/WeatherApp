@@ -73,3 +73,10 @@ instrument stays crisp in front and is never fogged.
 
 The quality tier is undesigned. Before the mobile work starts we need a measured answer
 to: what does this cost on a mid-range Android, and what gets dropped first?
+
+**Still open after the first implementation (2026-08-27).** The layer is built — an SkSL
+fragment shader for precipitation and a gradient driven by sun elevation and cloud cover
+— and none of it has been profiled on a device. The knobs a tier would turn already
+exist as uniforms (column count scales with intensity, and the shader returns early at
+zero), so the tier is a decision waiting on a measurement rather than a rewrite. Until
+that measurement exists, nothing in this project should describe the layer as cheap.

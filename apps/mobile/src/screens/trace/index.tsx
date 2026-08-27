@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Atmosphere } from "@/components/atmosphere";
 import { Now } from "@/components/now";
 import { Trace } from "@/components/trace";
 import { Week } from "@/components/week";
@@ -70,9 +71,21 @@ export function TraceScreen() {
     setSpan("day");
   };
 
+  // The sky reflects whichever hour is on screen, so scrubbing changes the weather
+  // behind the trace as well as the numbers in front of it (ADR-0013).
+  const atmosphereHour = now ?? plan.hours[0];
+
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <View style={styles.safe}>
+      <Atmosphere
+        localHour={atmosphereHour.local_hour}
+        weatherCode={atmosphereHour.weather_code}
+        precipProbPct={atmosphereHour.precip_prob_pct}
+        windKmh={atmosphereHour.wind_kmh}
+        cloudCoverPct={atmosphereHour.cloud_cover_pct}
+      />
+      <SafeAreaView style={styles.fill} edges={["top"]}>
+        <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Text style={styles.place}>İstanbul</Text>
           <Text style={styles.age}>
@@ -158,8 +171,9 @@ export function TraceScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -231,6 +245,8 @@ function Chip({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.ground },
+  // Transparent, so the atmosphere behind it shows through the upper part of the screen.
+  fill: { flex: 1 },
   scroll: { paddingBottom: space.xxl },
 
   header: {
