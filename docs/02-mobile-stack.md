@@ -31,9 +31,18 @@ the line is drawn once here:
 |---|---|---|
 | İz, Sor | Custom, from our tokens | The trace, the burn, the verdict typography — this is where the design carries meaning, and a native control would flatten it |
 | Sen, pickers, sheets, form controls | `@expo/ui` native components | A settings screen has no thesis. Platform convention serves the user better than our opinion does |
+| Tab bar | `NativeTabs`, trimmed | Native, but `labelVisibilityMode: "selected"` — a full Material 3 bar is tall enough to fight a screen built around a hairline instrument |
 
 The rule: **custom where the design says something, native where it would only say
 "we styled this ourselves".**
+
+Native does not mean untouched. Where the platform's default is loud enough to argue
+with the design — the height of a Material 3 tab bar — it gets trimmed through the
+options the component already offers, rather than replaced with our own.
+
+**Icons need both platforms named.** SF Symbols exist only on iOS, and setting only
+`sf` shipped an Android tab bar with no icons at all. Every native icon slot takes an
+`sf` name *and* a `VectorIcon` fallback.
 
 ## Offline strategy
 
