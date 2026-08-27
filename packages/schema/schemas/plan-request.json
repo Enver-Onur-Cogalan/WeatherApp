@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weatherapp.local/schemas/plan-request.json",
+  "title": "PlanRequest",
+  "description": "Ask the scoring engine when to go outside. The profile is sent inline for now; once profiles are stored per account this becomes a reference to a saved one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["latitude", "longitude", "timezone", "profile"],
+  "properties": {
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "timezone": { "type": "string", "description": "IANA name, e.g. Europe/Istanbul. Never a fixed offset — that breaks twice a year.", "minLength": 1 },
+    "days": { "type": "integer", "description": "Forecast horizon in days.", "minimum": 1, "maximum": 16 },
+    "profile": { "$ref": "https://weatherapp.local/schemas/activity-profile.json" }
+  }
+}

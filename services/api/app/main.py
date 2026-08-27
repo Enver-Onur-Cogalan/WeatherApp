@@ -8,7 +8,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
-from app.api import health
+from app.api import health, plan
+from app.core import deps
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger, request_id_var
 
@@ -19,6 +20,7 @@ logger = get_logger(__name__)
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level, json_output=settings.environment != "development")
+    await deps.startup(settings)
     logger.info(
         "service.start",
         environment=settings.environment,
@@ -26,6 +28,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         routing_enabled=settings.routing_enabled,
     )
     yield
+    await deps.shutdown()
     logger.info("service.stop")
 
 
@@ -57,3 +60,4 @@ async def attach_request_id(
 
 
 app.include_router(health.router)
+app.include_router(plan.router)

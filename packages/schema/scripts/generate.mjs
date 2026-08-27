@@ -28,9 +28,28 @@ const BANNER_PY = '"""Generated from packages/schema/schemas. Do not edit — ru
 const pascal = (s) => s.replace(/(^|[-_])(\w)/g, (_, __, c) => c.toUpperCase());
 const snake = (s) => s.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
 
-/** Resolve a local `$ref` against the document's `$defs`. */
+/**
+ * Every schema, keyed by `$id`, so one document can reference another instead of
+ * repeating it. Populated before any generation runs.
+ */
+const byId = new Map();
+
+/** True for a `$ref` that points at a different document rather than into this one. */
+function isExternal(ref) {
+  return typeof ref === "string" && !ref.startsWith("#");
+}
+
+/** The exported type name and module stem for an external `$ref`. */
+function externalTarget(ref) {
+  const target = byId.get(ref.split("#")[0]);
+  if (!target) throw new Error(`unknown $ref: ${ref}`);
+  return target;
+}
+
+/** Resolve a `$ref`: into this document's `$defs`, or into another document. */
 function deref(node, root) {
   if (!node?.$ref) return node;
+  if (isExternal(node.$ref)) return externalTarget(node.$ref).schema;
   const path = node.$ref.replace(/^#\//, "").split("/");
   return path.reduce((acc, key) => acc[key], root);
 }
@@ -46,7 +65,12 @@ function baseType(node) {
 
 // ----------------------------------------------------------------- Zod
 
-function zodFor(node, root, defs) {
+function zodFor(node, root, imports) {
+  if (isExternal(node?.$ref)) {
+    const target = externalTarget(node.$ref);
+    imports.add(target);
+    return target.name;
+  }
   const resolved = deref(node, root);
   const type = baseType(resolved);
   let out;
@@ -66,13 +90,13 @@ function zodFor(node, root, defs) {
   } else if (type === "boolean") {
     out = "z.boolean()";
   } else if (type === "array") {
-    out = `z.array(${zodFor(resolved.items, root, defs)})`;
+    out = `z.array(${zodFor(resolved.items, root, imports)})`;
     if (resolved.minItems !== undefined) out += `.min(${resolved.minItems})`;
     if (resolved.maxItems !== undefined) out += `.max(${resolved.maxItems})`;
   } else if (type === "object") {
     const required = new Set(resolved.required ?? []);
     const fields = Object.entries(resolved.properties ?? {}).map(([name, prop]) => {
-      const inner = zodFor(prop, root, defs);
+      const inner = zodFor(prop, root, imports);
       return `  ${name}: ${required.has(name) ? inner : `${inner}.optional()`},`;
     });
     out = `z.object({\n${fields.join("\n")}\n})`;
@@ -85,11 +109,13 @@ function zodFor(node, root, defs) {
 }
 
 function toZod(schema, name) {
-  const body = zodFor(schema, schema, schema.$defs ?? {});
+  const imports = new Set();
+  const body = zodFor(schema, schema, imports);
   const doc = schema.description ? `/** ${schema.description} */\n` : "";
   return [
     BANNER_TS,
     'import { z } from "zod";',
+    ...[...imports].map((t) => `import { ${t.name} } from "./${t.stem}";`),
     "",
     `${doc}export const ${name} = ${body};`,
     "",
@@ -100,7 +126,12 @@ function toZod(schema, name) {
 
 // ------------------------------------------------------------ Pydantic
 
-function pyType(node, root, extraModels) {
+function pyType(node, root, extraModels, imports) {
+  if (isExternal(node?.$ref)) {
+    const target = externalTarget(node.$ref);
+    imports.add(target);
+    return target.name;
+  }
   const resolved = deref(node, root);
   const type = baseType(resolved);
   let out;
@@ -117,7 +148,7 @@ function pyType(node, root, extraModels) {
   } else if (type === "boolean") {
     out = "bool";
   } else if (type === "array") {
-    out = `list[${pyType(resolved.items, root, extraModels)}]`;
+    out = `list[${pyType(resolved.items, root, extraModels, imports)}]`;
   } else if (type === "object") {
     // A nested object becomes its own model, named after the $ref when there is one.
     const refName = node.$ref ? pascal(node.$ref.split("/").pop()) : null;
@@ -134,9 +165,14 @@ function pyType(node, root, extraModels) {
   return nullable(resolved) ? `${out} | None` : out;
 }
 
-function pyField(name, node, root, required, extraModels) {
+function pyField(name, node, root, required, extraModels, imports) {
   const resolved = deref(node, root);
-  const annotation = pyType(node, root, extraModels);
+  let annotation = pyType(node, root, extraModels, imports);
+  // An optional field defaults to None, so its annotation has to admit None — otherwise
+  // the generated model declares `int` and hands it `None`, and mypy is right to object.
+  if (!required && !annotation.endsWith("| None")) {
+    annotation = `${annotation} | None`;
+  }
   const constraints = [];
   if (resolved.minimum !== undefined) constraints.push(`ge=${resolved.minimum}`);
   if (resolved.maximum !== undefined) constraints.push(`le=${resolved.maximum}`);
@@ -158,15 +194,16 @@ function pyField(name, node, root, required, extraModels) {
 
 function toPydantic(schema, name) {
   const extraModels = new Map();
+  const imports = new Set();
   const required = new Set(schema.required ?? []);
   const fields = Object.entries(schema.properties ?? {}).map(([field, prop]) =>
-    pyField(field, prop, schema, required.has(field), extraModels),
+    pyField(field, prop, schema, required.has(field), extraModels, imports),
   );
 
   const nested = [...extraModels.entries()].map(([modelName, node]) => {
     const nestedRequired = new Set(node.required ?? []);
     const inner = Object.entries(node.properties ?? {}).map(([field, prop]) =>
-      pyField(field, prop, schema, nestedRequired.has(field), new Map()),
+      pyField(field, prop, schema, nestedRequired.has(field), new Map(), imports),
     );
     return [`class ${modelName}(BaseModel):`, `    model_config = ConfigDict(extra="forbid")`, "", ...inner, ""].join("\n");
   });
@@ -184,6 +221,8 @@ function toPydantic(schema, name) {
     ...(needsLiteral ? ["from typing import Literal", ""] : []),
     "from pydantic import BaseModel, ConfigDict, Field",
     "",
+    ...[...imports].map((t) => `from .${snake(t.name)} import ${t.name}`),
+    ...(imports.size ? [""] : []),
     "",
     ...nested,
     `class ${name}(BaseModel):`,
@@ -201,6 +240,15 @@ mkdirSync(pydanticDir, { recursive: true });
 
 const files = readdirSync(schemaDir).filter((f) => f.endsWith(".json")).sort();
 const exports = [];
+
+// Register every schema before generating any, so a document can reference one that
+// has not been written yet — otherwise generation would depend on filename order.
+for (const file of files) {
+  const schema = JSON.parse(readFileSync(join(schemaDir, file), "utf8"));
+  const stem = file.replace(".json", "");
+  const name = schema.title ?? pascal(stem);
+  if (schema.$id) byId.set(schema.$id, { name, stem, schema });
+}
 
 for (const file of files) {
   const schema = JSON.parse(readFileSync(join(schemaDir, file), "utf8"));

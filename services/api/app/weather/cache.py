@@ -11,6 +11,7 @@ slower, not broken.
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -30,10 +31,18 @@ that parses is far more dangerous than one that does not.
 
 
 class RedisLike(Protocol):
-    """Only what this module uses, so tests need no Redis and no mocking library."""
+    """Only what this module uses, so tests need no Redis and no mocking library.
 
-    async def get(self, key: str) -> bytes | str | None: ...
-    async def set(self, key: str, value: str, ex: int | None = None) -> Any: ...
+    Two details make the real `redis.asyncio.Redis` satisfy this, and both are easy to
+    get wrong. The parameters are positional-only, because redis-py names its first one
+    `name` and a protocol the actual client cannot implement describes nothing. And the
+    methods are declared sync-returning-`Awaitable` rather than `async def`: redis-py
+    types them that way, and `async def` in a protocol demands a `Coroutine`
+    specifically — every coroutine is an awaitable, but not the other way round.
+    """
+
+    def get(self, key: str, /) -> Awaitable[Any]: ...
+    def set(self, key: str, value: str, /, *, ex: int | None = None) -> Awaitable[Any]: ...
 
 
 def _encode(forecast: Forecast) -> str:

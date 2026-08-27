@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weatherapp.local/schemas/plan-result.json",
+  "title": "PlanResult",
+  "description": "Everything the trace screen needs in one response: the scored hours it draws, the windows it ranks, and the constraint that closed the rest. No language model is involved in producing any of it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["latitude", "longitude", "timezone", "fetched_at", "stale", "hours", "windows"],
+  "properties": {
+    "latitude": { "type": "number" },
+    "longitude": { "type": "number" },
+    "timezone": { "type": "string" },
+    "fetched_at": { "type": "string", "format": "date-time", "description": "When the forecast was retrieved. The client is required to show this — a forecast without a time on it is a lie." },
+    "stale": { "type": "boolean", "description": "True when this was served from an expired cache because the upstream was unreachable." },
+    "hours": {
+      "type": "array",
+      "description": "Every scored hour, in order. This is the trace.",
+      "items": { "$ref": "#/$defs/scoredHour" }
+    },
+    "windows": {
+      "type": "array",
+      "description": "Contiguous runs that clear the threshold, best first.",
+      "items": { "$ref": "#/$defs/window" }
+    },
+    "blocker": {
+      "$ref": "#/$defs/blocker",
+      "description": "The constraint that eliminated the most hours a person would actually have used, or null when nothing did."
+    }
+  },
+  "$defs": {
+    "scoredHour": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hour_utc", "local_hour", "score", "excluded", "temperature_c", "precip_prob_pct", "wind_kmh", "uv_index", "cloud_cover_pct", "weather_code"],
+      "properties": {
+        "hour_utc": { "type": "string", "format": "date-time" },
+        "local_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "excluded": { "type": "boolean", "description": "Severe weather removed this hour outright, regardless of profile." },
+        "worst_penalty": { "type": ["string", "null"], "description": "Which constraint cost this hour the most, for explaining a low score without inventing a reason." },
+        "temperature_c": { "type": "number" },
+        "precip_prob_pct": { "type": "integer" },
+        "wind_kmh": { "type": "number" },
+        "uv_index": { "type": "number" },
+        "cloud_cover_pct": { "type": "integer" },
+        "weather_code": { "type": "integer" }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["day", "start_hour", "end_hour", "score", "length_hours"],
+      "properties": {
+        "day": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "start_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "end_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "length_hours": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "blocker": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["constraint", "hours"],
+      "properties": {
+        "constraint": { "type": "string", "description": "temperature, wind, precipitation, uv, or severe_weather. Never time_of_day — that is not weather." },
+        "hours": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

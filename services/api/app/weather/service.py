@@ -31,6 +31,15 @@ class WeatherService:
         self._cache = cache
         self._ttl = ttl_seconds
 
+    @property
+    def ttl_seconds(self) -> int:
+        """How old an entry may be before it counts as stale.
+
+        Exposed so a response can tell the client what it is looking at, rather than
+        the client guessing at a freshness rule the server owns.
+        """
+        return self._ttl
+
     async def get_forecast(self, location: Location, days: int = 7) -> Forecast:
         """Fresh if we have it, refetched if we can, stale if that is all there is."""
         cached = await self._cache.get(location, days)
