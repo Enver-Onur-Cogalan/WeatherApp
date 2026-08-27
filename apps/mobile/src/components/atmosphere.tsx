@@ -152,6 +152,61 @@ half4 main(float2 xy) {
     return half4(half3(0.87, 0.91, 0.99) * a, a);
 }`)!;
 
+
+/**
+ * Lightning.
+ *
+ * Timed entirely in the shader, so a storm needs no JavaScript at all — the alternative
+ * is a timer on the RN runtime firing every few seconds for as long as the screen is
+ * open, to change one number.
+ *
+ * Two details separate lightning from a blinking rectangle. Strikes are irregular:
+ * time is cut into windows, a hash decides whether each one fires and when inside it,
+ * so the rhythm never becomes a metronome. And each strike flickers — a hard flash, then
+ * a weaker one about a tenth of a second later, which is what a real strike does and
+ * what the eye is actually looking for.
+ */
+const LIGHTNING = Skia.RuntimeEffect.Make(`
+uniform float2 u_resolution;
+uniform float  u_time;
+uniform float  u_active;   // 1 while the hour on screen is a thunderstorm
+uniform float  u_fade;
+
+// Integer hashing by an irrational stride rather than sin(): the window index grows
+// without bound, and sin() loses its distribution long before the screen is closed.
+float h1(float n) { return fract(n * 0.6180339887); }
+float h2(float n) { return fract(n * 0.3819660113 + 0.37); }
+
+half4 main(float2 xy) {
+    if (u_active < 0.5) { return half4(0.0); }
+
+    float period = 4.5;
+    float window = floor(u_time / period);
+    float t = u_time - window * period;
+
+    float roll = h1(window);
+    if (roll > 0.62) { return half4(0.0); }   // not every window strikes
+
+    float at = 0.3 + roll * 2.6;
+    float dt = t - at;
+    if (dt < 0.0) { return half4(0.0); }
+
+    float flash = exp(-dt * 9.0);
+    float flicker = step(0.11, dt) * exp(-(dt - 0.11) * 14.0) * 0.55;
+    float amount = clamp(flash + flicker, 0.0, 1.0);
+
+    // Brightest where the cloud is, and off before the instrument starts.
+    float vertical = smoothstep(u_fade, 0.0, xy.y / u_resolution.y);
+
+    // A hashed horizontal centre, so successive strikes do not all light the same
+    // part of the sky.
+    float cx = 0.2 + h2(window) * 0.6;
+    float across = 0.55 + 0.45 * smoothstep(0.75, 0.0, abs(xy.x / u_resolution.x - cx));
+
+    float a = amount * vertical * across * 0.5;
+    return half4(half3(0.94, 0.96, 1.0) * a, a);
+}`)!;
+
 /** Fraction of height at which the sky has fully become the app's ground. */
 const FADE_AT = 0.62;
 
@@ -239,6 +294,7 @@ export function Atmosphere({
         : Math.min(1, precipProbPct / 100 + (condition === "downpour" ? 0.35 : 0));
   const slant = Math.max(-0.6, Math.min(0.6, windKmh / 30));
   const starAmount = Math.max(0, 1 - sun * 6) * Math.max(0, 1 - overcast * 1.35);
+  const storming = condition === "storm";
 
   const weatherUniforms = useDerivedValue(() => ({
     u_resolution: [size.width, size.height],
@@ -253,6 +309,13 @@ export function Atmosphere({
     u_resolution: [size.width, size.height],
     u_time: clock.get() / 1000,
     u_amount: starAmount,
+    u_fade: FADE_AT,
+  }));
+
+  const lightningUniforms = useDerivedValue(() => ({
+    u_resolution: [size.width, size.height],
+    u_time: clock.get() / 1000,
+    u_active: storming ? 1 : 0,
     u_fade: FADE_AT,
   }));
 
@@ -285,6 +348,14 @@ export function Atmosphere({
           {intensity > 0 ? (
             <Rect x={0} y={0} width={size.width} height={size.height}>
               <Shader source={WEATHER} uniforms={weatherUniforms} />
+            </Rect>
+          ) : null}
+
+          {/* Last, so a strike lights the rain in front of the sky rather than only
+              the sky behind it. */}
+          {storming ? (
+            <Rect x={0} y={0} width={size.width} height={size.height}>
+              <Shader source={LIGHTNING} uniforms={lightningUniforms} />
             </Rect>
           ) : null}
         </Canvas>
