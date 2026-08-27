@@ -1,240 +1,293 @@
 /**
- * The comfort trace — the spine of the app.
+ * The comfort trace for one day — the spine of the app.
  *
  * What it plots is not temperature but the composite comfort score for the active
- * activity profile, which is why the same week is a different landscape for running
- * than for cycling (docs/10).
+ * activity profile, which is why the same day is a different landscape for running than
+ * for cycling (docs/10).
  *
- * Everything that moves lives on the UI runtime. The path is built once per slice and
- * never rebuilt while a finger is down; only the scrubber's position changes per frame,
- * and the readout is drawn in Skia from derived values so no React render is involved
- * in dragging.
+ * Two rules hold the performance together. The path is built once per slice, never
+ * inside a gesture. And the readout re-renders on the *hour boundary* rather than every
+ * frame: a `useAnimatedReaction` fires when the rounded index changes, which is at most
+ * 24 renders across a full drag instead of 120 a second.
  */
 
 import {
   Canvas,
-  Circle,
   Group,
-  Line,
-  LinearGradient,
   Path,
   Skia,
   Text as SkText,
   useFont,
-  vec,
+  type SkPath,
 } from "@shopify/react-native-skia";
-import { useMemo } from "react";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import {
-  useDerivedValue,
-  useSharedValue,
-  withSpring,
-  type SharedValue,
-} from "react-native-reanimated";
+import { useAnimatedReaction, useSharedValue } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 
 import type { TraceSlice } from "@/lib/plan";
-import { colors } from "@/theme";
+import { colors, size, space, type } from "@/theme";
 
 const PLEX = require("@expo-google-fonts/ibm-plex-mono/500Medium/IBMPlexMono_500Medium.ttf");
 
-const PAD_TOP = 22;
-const PAD_BOTTOM = 34;
-const AXIS_SIZE = 11;
-const READOUT_SIZE = 15;
+const PAD_TOP = 16;
+const AXIS_BAND = 26;
 const STROKE = 2.5;
+const AXIS_SIZE = 10;
 
 type Props = {
   slice: TraceSlice;
-  height?: number;
   width: number;
+  height?: number;
   /** Index the scrubber opens on, usually the start of the best window. */
   initialIndex: number;
 };
 
-export function Trace({ slice, width, height = 190, initialIndex }: Props) {
+export function Trace({ slice, width, height = 168, initialIndex }: Props) {
   const axisFont = useFont(PLEX, AXIS_SIZE);
-  const readoutFont = useFont(PLEX, READOUT_SIZE);
+  const start = Math.min(Math.max(initialIndex, 0), slice.count - 1);
+  const [at, setAt] = useState(start);
 
-  const plot = useMemo(
-    () => ({
-      top: PAD_TOP,
-      bottom: height - PAD_BOTTOM,
-      step: slice.count > 1 ? width / (slice.count - 1) : width,
-    }),
-    [width, height, slice.count],
+  const plotBottom = height - AXIS_BAND;
+  const step = slice.count > 1 ? width / (slice.count - 1) : width;
+
+  const geometry = useMemo(
+    () => buildGeometry(slice, { width, top: PAD_TOP, bottom: plotBottom, step }),
+    [slice, width, plotBottom, step],
   );
 
-  const y = useMemo(() => {
-    const span = plot.bottom - plot.top;
-    return (score: number) => plot.bottom - (score / 100) * span;
-  }, [plot]);
+  const index = useSharedValue(start);
+  const commit = useCallback((next: number) => setAt(next), []);
 
-  /**
-   * Built once per slice. Rebuilding a 168-point path inside a gesture handler is the
-   * difference between a trace that tracks the finger and one that lags it.
-   */
-  const path = useMemo(() => {
-    const p = Skia.Path.Make();
-    slice.scores.forEach((score, i) => {
-      const px = i * plot.step;
-      const py = y(score);
-      if (i === 0) p.moveTo(px, py);
-      else p.lineTo(px, py);
-    });
-    return p;
-  }, [slice, plot, y]);
-
-  /** The scorch under each open window, clipped to that run of hours. */
-  const burnPaths = useMemo(() => {
-    const out: { fill: ReturnType<typeof Skia.Path.Make>; from: number; to: number }[] = [];
-    for (let i = 0; i < slice.burns.length; i += 2) {
-      const start = slice.burns[i];
-      const end = slice.burns[i + 1];
-      const fill = Skia.Path.Make();
-      fill.moveTo(start * plot.step, plot.bottom);
-      for (let h = start; h <= end; h += 1) fill.lineTo(h * plot.step, y(slice.scores[h]));
-      fill.lineTo(end * plot.step, plot.bottom);
-      fill.close();
-      out.push({ fill, from: start * plot.step, to: end * plot.step });
-    }
-    return out;
-  }, [slice, plot, y]);
-
-  /** Midnight is heavier than the other six-hour marks; the day boundary is information. */
-  const gridlines = useMemo(
-    () =>
-      slice.localHours
-        .map((hour, i) => ({ hour, x: i * plot.step }))
-        .filter(({ hour }) => hour % 6 === 0),
-    [slice, plot],
+  // Renders only when the hour under the finger changes, not on every frame.
+  useAnimatedReaction(
+    () => Math.round(index.get()),
+    (next, previous) => {
+      if (next !== previous) scheduleOnRN(commit, next);
+    },
   );
 
-  const index = useSharedValue(Math.min(initialIndex, slice.count - 1));
-
+  const count = slice.count;
   const pan = Gesture.Pan()
+    .minDistance(0)
     .onBegin((e) => {
-      index.set(clampIndex(e.x / step, count));
+      index.set(Math.min(Math.max(e.x / step, 0), count - 1));
     })
     .onUpdate((e) => {
-      // No scheduleOnRN here. At 120 Hz this fires twice a frame, and anything crossing
-      // to the RN runtime from inside onUpdate is the classic way to make a drag stutter.
-      index.set(clampIndex(e.x / step, count));
-    })
-    .onEnd(() => {
-      index.set(withSpring(Math.round(index.get()), { duration: 220, dampingRatio: 1 }));
+      // Nothing is scheduled back to the RN runtime here — the reaction above owns that,
+      // and only when a whole hour has been crossed.
+      index.set(Math.min(Math.max(e.x / step, 0), count - 1));
     });
 
-  // Worklets capture primitives, never helpers. `y` is an ordinary function built on
-  // the RN runtime with useMemo, and calling it from a worklet throws on device while
-  // working fine in the debugger — so the same mapping is done inline from numbers.
-  const plotTop = plot.top;
-  const plotBottom = plot.bottom;
-  const step = plot.step;
-  const scores = slice.scores;
-  const count = slice.count;
-
-  const scrubX = useDerivedValue(() => index.get() * step);
-  const scrubY = useDerivedValue(() => {
-    const at = Math.min(Math.max(Math.round(index.get()), 0), count - 1);
-    const score = scores[at] ?? 0;
-    return plotBottom - (score / 100) * (plotBottom - plotTop);
-  });
-
-  // Hooks stay at the top level — a `useDerivedValue` inlined into a JSX prop happens
-  // to evaluate in a stable order here, but it is a rule violation waiting to bite.
-  // Plain object literals rather than Skia's `vec`: a helper from another module is one
-  // more thing that has to be worklet-safe, and a Vector is only {x, y}.
-  const scrubTop = useDerivedValue(() => ({ x: scrubX.get(), y: 0 }));
-  const scrubFoot = useDerivedValue(() => ({ x: scrubX.get(), y: plotBottom + 6 }));
-  const readout = useReadout(index, slice);
+  const scrubX = at * step;
+  const scrubY = plotBottom - (slice.scores[at] / 100) * (plotBottom - PAD_TOP);
 
   return (
-    <GestureDetector gesture={pan}>
-      <View style={[styles.wrap, { height }]}>
-        <Canvas style={{ width, height }}>
-          {gridlines.map(({ hour, x }) => (
-            <Group key={x}>
-              <Line
-                p1={vec(x, 0)}
-                p2={vec(x, plot.bottom + 6)}
-                color={hour === 0 ? colors.rule : colors.ruleSoft}
-                strokeWidth={1}
-              />
-              {axisFont ? (
-                <SkText
-                  x={x + 5}
-                  y={height - 12}
-                  text={String(hour).padStart(2, "0")}
-                  font={axisFont}
-                  color={colors.inkDim}
+    <View>
+      <Readout slice={slice} at={at} />
+
+      <GestureDetector gesture={pan}>
+        <View style={[styles.stage, { height }]} collapsable={false}>
+          <Canvas style={{ width, height }}>
+            {geometry.grid.map((line) => (
+              <Group key={line.x}>
+                <Path
+                  path={line.path}
+                  style="stroke"
+                  strokeWidth={1}
+                  color={line.major ? colors.rule : colors.ruleSoft}
                 />
-              ) : null}
-            </Group>
-          ))}
+                {axisFont ? (
+                  <SkText
+                    x={line.labelX}
+                    y={height - 9}
+                    text={line.label}
+                    font={axisFont}
+                    color={colors.inkDim}
+                  />
+                ) : null}
+              </Group>
+            ))}
 
-          {burnPaths.map(({ fill, from }) => (
-            <Path key={from} path={fill}>
-              <LinearGradient
-                start={vec(0, plot.top)}
-                end={vec(0, plot.bottom)}
-                colors={[colors.burnWash, "rgba(196,104,44,0)"]}
-              />
-            </Path>
-          ))}
+            {geometry.burnFills.map((fill, i) => (
+              <Path key={`fill-${i}`} path={fill} color={colors.burnWash} />
+            ))}
 
-          <Path path={path} style="stroke" strokeWidth={STROKE} color={colors.ink} />
+            <Path path={geometry.line} style="stroke" strokeWidth={STROKE} color={colors.ink} />
 
-          {burnPaths.map(({ fill, from, to }) => (
-            <Group key={`burn-${from}`} clip={{ x: from, y: 0, width: to - from, height }}>
+            {geometry.burnLines.map((burn, i) => (
               <Path
-                path={path}
+                key={`burn-${i}`}
+                path={burn}
                 style="stroke"
-                strokeWidth={STROKE * 1.6}
+                strokeWidth={STROKE * 1.8}
                 color={colors.burnHi}
                 strokeCap="round"
               />
-            </Group>
-          ))}
+            ))}
 
-          <Line p1={scrubTop} p2={scrubFoot} color={colors.ink} strokeWidth={1} />
-          <Circle cx={scrubX} cy={scrubY} r={4.5} color={colors.ink} />
-
-          {readoutFont ? (
-            <SkText x={0} y={14} text={readout} font={readoutFont} color={colors.ink} />
-          ) : null}
-        </Canvas>
-      </View>
-    </GestureDetector>
+            <Path
+              path={verticalPath(scrubX, 0, plotBottom + 4)}
+              style="stroke"
+              strokeWidth={1}
+              color={colors.ink}
+            />
+            <Path path={dotPath(scrubX, scrubY, 4.5)} color={colors.ink} />
+          </Canvas>
+        </View>
+      </GestureDetector>
+    </View>
   );
 }
 
-function clampIndex(raw: number, count: number): number {
-  "worklet";
-  return Math.min(Math.max(raw, 0), count - 1);
+/**
+ * The values at the scrubbed hour, as ordinary React text.
+ *
+ * Drawing these in Skia from a `SharedValue<string>` is what crashed the screen on
+ * device: Skia's animated props carry numbers, and handing `<Text>` an animated string
+ * takes the native side down with no JavaScript error to catch.
+ */
+function Readout({ slice, at }: { slice: TraceSlice; at: number }) {
+  const hour = String(slice.localHours[at]).padStart(2, "0");
+  const score = Math.round(slice.scores[at]);
+
+  return (
+    <View style={styles.readout}>
+      <View style={styles.readoutHead}>
+        <Text style={styles.hour}>{hour}:00</Text>
+        <Text style={[styles.score, score >= 75 && styles.scoreGood]}>skor {score}</Text>
+      </View>
+      <View style={styles.values}>
+        <Value label="Sıcaklık" value={`${slice.temperature[at].toFixed(1)}°`} />
+        <Value label="Rüzgâr" value={String(Math.round(slice.wind[at]))} unit="km/h" cool />
+        <Value label="Yağış" value={`%${slice.precipitation[at]}`} />
+        <Value label="UV" value={String(Math.round(slice.uv[at]))} />
+      </View>
+    </View>
+  );
 }
 
-/**
- * The readout, composed on the UI runtime and drawn by Skia.
- *
- * Rendering these four values as React `<Text>` would mean a render per frame while
- * dragging — the single biggest cause of jank in a React Native gesture.
- */
-function useReadout(index: SharedValue<number>, slice: TraceSlice) {
-  return useDerivedValue(() => {
-    const at = Math.min(Math.max(Math.round(index.get()), 0), slice.count - 1);
-    const hour = String(slice.localHours[at]).padStart(2, "0");
-    const temp = slice.temperature[at].toFixed(1);
-    const wind = Math.round(slice.wind[at]);
-    const rain = slice.precipitation[at];
-    return `${hour}:00   ${temp}°   ${wind} km/h   %${rain}`;
+function Value({
+  label,
+  value,
+  unit,
+  cool,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  cool?: boolean;
+}) {
+  return (
+    <View style={styles.value}>
+      <Text style={[styles.valueNum, cool && styles.valueCool]}>
+        {value}
+        {unit ? <Text style={styles.valueUnit}> {unit}</Text> : null}
+      </Text>
+      <Text style={styles.valueLabel}>{label}</Text>
+    </View>
+  );
+}
+
+type GridLine = {
+  x: number;
+  labelX: number;
+  label: string;
+  major: boolean;
+  path: SkPath;
+};
+
+type Geometry = {
+  line: SkPath;
+  burnFills: SkPath[];
+  burnLines: SkPath[];
+  grid: GridLine[];
+};
+
+function buildGeometry(
+  slice: TraceSlice,
+  plot: { width: number; top: number; bottom: number; step: number },
+): Geometry {
+  const y = (score: number) => plot.bottom - (score / 100) * (plot.bottom - plot.top);
+  const x = (i: number) => i * plot.step;
+
+  const line = Skia.Path.Make();
+  slice.scores.forEach((score, i) => {
+    if (i === 0) line.moveTo(x(i), y(score));
+    else line.lineTo(x(i), y(score));
   });
+
+  const burnFills: SkPath[] = [];
+  const burnLines: SkPath[] = [];
+  for (let i = 0; i < slice.burns.length; i += 2) {
+    const from = slice.burns[i];
+    const to = slice.burns[i + 1];
+
+    const fill = Skia.Path.Make();
+    fill.moveTo(x(from), plot.bottom);
+    for (let h = from; h <= to; h += 1) fill.lineTo(x(h), y(slice.scores[h]));
+    fill.lineTo(x(to), plot.bottom);
+    fill.close();
+    burnFills.push(fill);
+
+    const stroke = Skia.Path.Make();
+    for (let h = from; h <= to; h += 1) {
+      if (h === from) stroke.moveTo(x(h), y(slice.scores[h]));
+      else stroke.lineTo(x(h), y(slice.scores[h]));
+    }
+    burnLines.push(stroke);
+  }
+
+  // Every six hours, heavier at midnight — the day boundary is information, not decoration.
+  const grid: GridLine[] = slice.localHours
+    .map((hour, i) => ({ hour, i }))
+    .filter(({ hour }) => hour % 6 === 0)
+    .map(({ hour, i }) => {
+      const px = x(i);
+      return {
+        x: px,
+        // Keep the last label inside the canvas instead of half off the edge.
+        labelX: Math.min(px + 4, plot.width - 18),
+        label: `${String(hour).padStart(2, "0")}:00`,
+        major: hour === 0,
+        path: verticalPath(px, 0, plot.bottom + 4),
+      };
+    });
+
+  return { line, burnFills, burnLines, grid };
+}
+
+function verticalPath(x: number, from: number, to: number): SkPath {
+  const p = Skia.Path.Make();
+  p.moveTo(x, from);
+  p.lineTo(x, to);
+  return p;
+}
+
+function dotPath(cx: number, cy: number, r: number): SkPath {
+  const p = Skia.Path.Make();
+  p.addCircle(cx, cy, r);
+  return p;
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  stage: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.rule,
   },
+
+  readout: { paddingHorizontal: space.lg, paddingBottom: space.md, gap: space.sm },
+  readoutHead: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
+  hour: { ...type.data, fontSize: 22, color: colors.burnHi },
+  score: { ...type.label, fontSize: 9, color: colors.inkDim },
+  scoreGood: { color: colors.burn },
+
+  values: { flexDirection: "row", gap: space.xl },
+  value: { gap: 1 },
+  valueNum: { ...type.data, fontSize: size.body, color: colors.ink },
+  valueCool: { color: colors.glacial },
+  valueUnit: { ...type.data, fontSize: 10, color: colors.inkDim },
+  valueLabel: { ...type.label, fontSize: 9, color: colors.inkDim },
 });

@@ -136,15 +136,39 @@ export function sliceFor(plan: PlanResult, span: Span, dayOffset = 0): TraceSlic
   };
 }
 
-/** Index of the first hour of the highest-ranked window, so the scrubber opens on it. */
-export function bestHourIndex(plan: PlanResult, slice: TraceSlice): number {
-  const best = plan.windows[0];
-  if (!best) return Math.floor(slice.count / 2);
+/**
+ * Where the scrubber opens: the start of that day's best window.
+ *
+ * Falling back to the day's highest-scoring hour rather than the middle means a day with
+ * no window still opens somewhere meaningful instead of at an arbitrary noon.
+ */
+export function bestHourIndex(plan: PlanResult, slice: TraceSlice, dayOffset = 0): number {
+  const date = plan.hours[dayOffset * 24]?.hour_utc.slice(0, 10);
+  const best = plan.windows.find((w) => w.day === date);
+  if (best) {
+    const index = slice.localHours.indexOf(best.start_hour);
+    if (index >= 0) return index;
+  }
+  let top = 0;
+  for (let i = 1; i < slice.count; i += 1) {
+    if (slice.scores[i] > slice.scores[top]) top = i;
+  }
+  return top;
+}
 
-  const index = plan.hours.findIndex(
-    (h) => h.hour_utc.startsWith(best.day) && h.local_hour === best.start_hour,
-  );
-  return index >= 0 && index < slice.count ? index : Math.floor(slice.count / 2);
+const WEEKDAYS_SHORT = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+
+/** Short day names for the day strip, in the order the forecast returned them. */
+export function dayLabels(plan: PlanResult): string[] {
+  const seen: string[] = [];
+  for (const hour of plan.hours) {
+    const date = hour.hour_utc.slice(0, 10);
+    if (!seen.includes(date)) seen.push(date);
+  }
+  return seen.map((date) => {
+    const [year, month, day] = date.split("-").map(Number);
+    return WEEKDAYS_SHORT[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  });
 }
 
 /** "Cumartesi 06:00–11:00" — the verdict, which is a span rather than a number. */

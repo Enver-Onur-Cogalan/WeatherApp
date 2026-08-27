@@ -1,9 +1,15 @@
 /**
  * İz — the main screen, and the planner's output.
  *
- * Top to bottom: the verdict (a span of time, not a temperature), the trace, the time
- * span control, the activity chips, and the ranked windows. docs/11 has the reasoning
- * for the order and for what each control is not.
+ * The verdict is a span of hours rather than a temperature, because that is what the
+ * scoring engine produces (docs/10). Below it, two views that answer different
+ * questions rather than the same one at two zoom levels:
+ *
+ *   24 saat — the shape of one day, scrubbable hour by hour
+ *   7 gün   — which days have windows, and where in the day they fall
+ *
+ * The week is not a longer day. Drawing 168 hours as one trace was legible in a mockup
+ * and a smear on a phone, so the week gets a grid of days instead.
  */
 
 import { useMemo, useState } from "react";
@@ -18,17 +24,18 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Trace } from "@/components/trace";
+import { Week } from "@/components/week";
 import {
   ACTIVITIES,
   ACTIVITY_LABELS,
   CONSTRAINT_LABELS,
   bestHourIndex,
+  dayLabels,
   formatAge,
   formatWindowDay,
   formatWindowSpan,
   getPlan,
   sliceFor,
-  SPAN_LABELS,
   type ActivityKey,
   type Span,
 } from "@/lib/plan";
@@ -40,11 +47,18 @@ export function TraceScreen() {
   const { width } = useWindowDimensions();
   const [activity, setActivity] = useState<ActivityKey>("running");
   const [span, setSpan] = useState<Span>("day");
+  const [day, setDay] = useState(0);
 
   const plan = getPlan(activity);
-  const slice = useMemo(() => sliceFor(plan, span), [plan, span]);
-  const startAt = useMemo(() => bestHourIndex(plan, slice), [plan, slice]);
+  const days = useMemo(() => dayLabels(plan), [plan]);
+  const slice = useMemo(() => sliceFor(plan, "day", day), [plan, day]);
+  const startAt = useMemo(() => bestHourIndex(plan, slice, day), [plan, slice, day]);
   const best = plan.windows[0];
+
+  const showDay = (index: number) => {
+    setDay(index);
+    setSpan("day");
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -69,22 +83,6 @@ export function TraceScreen() {
           <Empty blocker={plan.blocker} activity={activity} />
         )}
 
-        {/* Full-bleed: the trace is the spine, so it runs edge to edge. */}
-        <View style={styles.bleed}>
-          {/* Remounting on span or activity change resets the scrubber to the new
-              best window, which is what the change was asking for. */}
-          <Trace
-            key={`${activity}-${span}`}
-            slice={slice}
-            width={width}
-            initialIndex={startAt}
-          />
-        </View>
-
-        <View style={styles.controls}>
-          <Segmented value={span} onChange={setSpan} />
-        </View>
-
         <View style={styles.chips}>
           {ACTIVITIES.map((key) => (
             <Chip
@@ -96,16 +94,53 @@ export function TraceScreen() {
           ))}
         </View>
 
-        <View style={styles.list}>
-          <Text style={styles.listHead}>Bu hafta</Text>
-          {plan.windows.slice(0, 6).map((w) => (
-            <View key={`${w.day}-${w.start_hour}`} style={styles.row}>
-              <Text style={styles.rowDay}>{formatWindowDay(w).slice(0, 3)}</Text>
-              <Text style={styles.rowSpan}>{formatWindowSpan(w)}</Text>
-              <Bars score={w.score} />
-            </View>
-          ))}
+        <View style={styles.tabs}>
+          <Tab label="24 saat" active={span === "day"} onPress={() => setSpan("day")} />
+          <Tab label="7 gün" active={span === "week"} onPress={() => setSpan("week")} />
         </View>
+
+        {span === "day" ? (
+          <View style={styles.dayView}>
+            <View style={styles.dayStrip}>
+              {days.map((label, index) => (
+                <Pressable
+                  key={label + index}
+                  onPress={() => setDay(index)}
+                  hitSlop={6}
+                  style={[styles.dayPill, index === day && styles.dayPillOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: index === day }}
+                >
+                  <Text style={[styles.dayPillText, index === day && styles.dayPillTextOn]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Full-bleed: the trace is the spine, so it runs edge to edge. */}
+            {/* Remounting per day and activity resets the scrubber to that slice's best
+                hour, which is what changing either was asking for. */}
+            <Trace
+              key={`${activity}-${day}`}
+              slice={slice}
+              width={width}
+              initialIndex={startAt}
+            />
+
+            <Text style={styles.legend}>
+              Çizgi ne kadar yüksekse o saat {ACTIVITY_LABELS[activity].toLowerCase()} için
+              o kadar uygun. Kehribar bölümler sınırlarını geçen pencereler.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.weekView}>
+            <Week plan={plan} onSelectDay={showDay} />
+            <Text style={styles.legend}>
+              Her satır bir gün, aynı 24 saatlik eksende. Bir güne dokun, o günün izini aç.
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -133,24 +168,25 @@ function Empty({
   );
 }
 
-function Segmented({ value, onChange }: { value: Span; onChange: (s: Span) => void }) {
+function Tab({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
-    <View style={styles.segment}>
-      {(Object.keys(SPAN_LABELS) as Span[]).map((key) => (
-        <Pressable
-          key={key}
-          onPress={() => onChange(key)}
-          hitSlop={8}
-          style={[styles.segmentItem, key === value && styles.segmentItemOn]}
-          accessibilityRole="button"
-          accessibilityState={{ selected: key === value }}
-        >
-          <Text style={[styles.segmentText, key === value && styles.segmentTextOn]}>
-            {SPAN_LABELS[key]}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={[styles.tab, active && styles.tabOn]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <Text style={[styles.tabText, active && styles.tabTextOn]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -176,18 +212,6 @@ function Chip({
   );
 }
 
-/** Four marks, filled by score. A number would be precision the score does not have. */
-function Bars({ score }: { score: number }) {
-  const filled = Math.max(1, Math.round((score / 100) * 4));
-  return (
-    <View style={styles.bars}>
-      {[0, 1, 2, 3].map((i) => (
-        <View key={i} style={[styles.bar, i < filled && styles.barOn]} />
-      ))}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.ground },
   scroll: { paddingBottom: space.xxl },
@@ -202,20 +226,11 @@ const styles = StyleSheet.create({
   place: { ...type.heading, fontSize: size.caption, color: colors.ink, letterSpacing: 0.6 },
   age: { ...type.data, fontSize: size.caption, color: colors.inkDim },
 
-  verdict: { paddingHorizontal: GUTTER, paddingTop: space.xl, gap: 2 },
+  verdict: { paddingHorizontal: GUTTER, paddingTop: space.lg, gap: 2 },
   day: { ...type.display, fontSize: size.verdict, color: colors.ink, letterSpacing: 0.5 },
   span: { ...type.data, fontSize: size.span, color: colors.burnHi },
   why: { ...type.body, fontSize: size.caption, color: colors.inkDim, marginTop: space.sm },
   emptyHead: { ...type.heading, fontSize: size.title, color: colors.ink, lineHeight: 24 },
-
-  bleed: { marginTop: space.xl },
-
-  controls: { paddingHorizontal: GUTTER, marginTop: space.md, alignItems: "flex-start" },
-  segment: { flexDirection: "row", borderWidth: 1, borderColor: colors.rule },
-  segmentItem: { paddingVertical: 6, paddingHorizontal: space.md },
-  segmentItemOn: { backgroundColor: colors.burnWash },
-  segmentText: { ...type.label, color: colors.inkDim },
-  segmentTextOn: { color: colors.burnHi },
 
   chips: { flexDirection: "row", gap: space.sm, paddingHorizontal: GUTTER, marginTop: space.lg },
   chip: {
@@ -229,26 +244,38 @@ const styles = StyleSheet.create({
   chipText: { ...type.body, fontSize: size.caption, color: colors.inkDim },
   chipTextOn: { color: colors.burnHi },
 
-  list: { marginTop: space.xxl, paddingHorizontal: GUTTER },
-  listHead: {
-    ...type.label,
-    color: colors.inkDim,
-    paddingBottom: space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.ruleSoft,
-  },
-  row: {
+  tabs: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: space.md,
-    paddingVertical: space.md,
+    marginTop: space.xl,
+    marginHorizontal: GUTTER,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.ruleSoft,
+    borderColor: colors.rule,
   },
-  rowDay: { ...type.data, fontSize: size.caption, color: colors.inkDim, width: 34 },
-  rowSpan: { ...type.data, fontSize: size.caption, color: colors.ink, flex: 1 },
+  tab: { paddingVertical: space.sm, paddingRight: space.xl, marginBottom: -1 },
+  tabOn: { borderBottomWidth: 2, borderColor: colors.burn },
+  tabText: { ...type.label, color: colors.inkDim },
+  tabTextOn: { color: colors.ink },
 
-  bars: { flexDirection: "row", gap: 2 },
-  bar: { width: 5, height: 11, backgroundColor: colors.rule },
-  barOn: { backgroundColor: colors.burn },
+  dayView: { marginTop: space.lg },
+  dayStrip: {
+    flexDirection: "row",
+    gap: space.xs,
+    paddingHorizontal: GUTTER,
+    marginBottom: space.lg,
+  },
+  dayPill: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: radius.sm },
+  dayPillOn: { backgroundColor: colors.surface },
+  dayPillText: { ...type.data, fontSize: 11, color: colors.inkDim },
+  dayPillTextOn: { color: colors.ink },
+
+  weekView: { marginTop: space.xl },
+
+  legend: {
+    ...type.body,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.inkDim,
+    paddingHorizontal: GUTTER,
+    marginTop: space.md,
+  },
 });
