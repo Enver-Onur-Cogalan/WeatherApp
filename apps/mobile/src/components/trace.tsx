@@ -27,6 +27,7 @@ import { useAnimatedReaction, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 
 import type { TraceSlice } from "@/lib/plan";
+import { conditionLabel } from "@/lib/weather-code";
 import { colors, size, space, type } from "@/theme";
 
 const PLEX = require("@expo-google-fonts/ibm-plex-mono/500Medium/IBMPlexMono_500Medium.ttf");
@@ -42,9 +43,11 @@ type Props = {
   height?: number;
   /** Index the scrubber opens on, usually the start of the best window. */
   initialIndex: number;
+  /** The hour happening now within this slice, or null when the day is not today. */
+  nowIndex?: number | null;
 };
 
-export function Trace({ slice, width, height = 168, initialIndex }: Props) {
+export function Trace({ slice, width, height = 168, initialIndex, nowIndex }: Props) {
   const axisFont = useFont(PLEX, AXIS_SIZE);
   const start = Math.min(Math.max(initialIndex, 0), slice.count - 1);
   const [at, setAt] = useState(start);
@@ -127,6 +130,16 @@ export function Trace({ slice, width, height = 168, initialIndex }: Props) {
               />
             ))}
 
+            {/* Where the day actually is, so the trace is oriented before it is read. */}
+            {nowIndex != null ? (
+              <Path
+                path={verticalPath(nowIndex * step, PAD_TOP, plotBottom)}
+                style="stroke"
+                strokeWidth={1}
+                color={colors.burn}
+              />
+            ) : null}
+
             <Path
               path={verticalPath(scrubX, 0, plotBottom + 4)}
               style="stroke"
@@ -156,6 +169,7 @@ function Readout({ slice, at }: { slice: TraceSlice; at: number }) {
     <View style={styles.readout}>
       <View style={styles.readoutHead}>
         <Text style={styles.hour}>{hour}:00</Text>
+        <Text style={styles.condition}>{conditionLabel(slice.weatherCodes[at])}</Text>
         <Text style={[styles.score, score >= 75 && styles.scoreGood]}>skor {score}</Text>
       </View>
       <View style={styles.values}>
@@ -281,6 +295,7 @@ const styles = StyleSheet.create({
   readout: { paddingHorizontal: space.lg, paddingBottom: space.md, gap: space.sm },
   readoutHead: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
   hour: { ...type.data, fontSize: 22, color: colors.burnHi },
+  condition: { ...type.body, fontSize: size.caption, color: colors.ink2, flex: 1 },
   score: { ...type.label, fontSize: 9, color: colors.inkDim },
   scoreGood: { color: colors.burn },
 

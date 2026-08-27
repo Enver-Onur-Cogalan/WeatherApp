@@ -90,6 +90,28 @@ the interface carries `tabular-nums`.
 Both faces carry full Latin Extended, so Turkish diacritics (ğ, ı, İ, ş, ç, ö, ü) render
 correctly at every weight and width.
 
+## Current conditions
+
+The screen leads with a planning verdict, and the first build let that crowd out the
+most common reason anyone opens a weather app. Temperature was present only as evidence
+under the trace, reachable by scrubbing — which is to say, reachable by a gesture a
+first-time user has no reason to try.
+
+Current conditions now sit in a single line above the verdict: temperature, condition,
+and the day's high and low. It answers the ordinary question at a glance without taking
+the top of the screen from the argument the product is making.
+
+The same correction runs through the week grid, which carries each day's high, low and
+condition beside its windows — so one grid answers both *when should I go* and *is it
+raining on Thursday*.
+
+There is no separate weather tab. A fourth tab would demote the planner to a side
+feature and show the same data twice; the reasoning is the same as
+[ADR-0014](./adr/ADR-0014-planner-on-main-screen.md).
+
+**Conditions are words, not pictograms.** The icon set is still undesigned, and a
+placeholder glyph reads as a decision that was made. Words are honest until it is.
+
 ## The signature: the trace
 
 A continuous line across the screen. What it plots is **not temperature** — it is the

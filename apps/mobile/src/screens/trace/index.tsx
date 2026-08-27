@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Now } from "@/components/now";
 import { Trace } from "@/components/trace";
 import { Week } from "@/components/week";
 import {
@@ -30,6 +31,8 @@ import {
   ACTIVITY_LABELS,
   CONSTRAINT_LABELS,
   bestHourIndex,
+  currentDayIndex,
+  currentHour,
   dayLabels,
   formatAge,
   formatWindowDay,
@@ -47,13 +50,20 @@ export function TraceScreen() {
   const { width } = useWindowDimensions();
   const [activity, setActivity] = useState<ActivityKey>("running");
   const [span, setSpan] = useState<Span>("day");
-  const [day, setDay] = useState(0);
+  const [day, setDay] = useState<number | null>(null);
 
   const plan = getPlan(activity);
+  // Opens on the day the person is actually in, not on the first day of the forecast.
+  const today = currentDayIndex(plan);
+  const selectedDay = day ?? today;
   const days = useMemo(() => dayLabels(plan), [plan]);
-  const slice = useMemo(() => sliceFor(plan, "day", day), [plan, day]);
-  const startAt = useMemo(() => bestHourIndex(plan, slice, day), [plan, slice, day]);
+  const slice = useMemo(() => sliceFor(plan, "day", selectedDay), [plan, selectedDay]);
+  const startAt = useMemo(
+    () => bestHourIndex(plan, slice, selectedDay),
+    [plan, slice, selectedDay],
+  );
   const best = plan.windows[0];
+  const now = currentHour(plan);
 
   const showDay = (index: number) => {
     setDay(index);
@@ -70,6 +80,8 @@ export function TraceScreen() {
             {formatAge(plan.fetched_at)}
           </Text>
         </View>
+
+        <Now hour={now} today={plan.days[today] ?? null} />
 
         {best ? (
           <View style={styles.verdict}>
@@ -107,11 +119,11 @@ export function TraceScreen() {
                   key={label + index}
                   onPress={() => setDay(index)}
                   hitSlop={6}
-                  style={[styles.dayPill, index === day && styles.dayPillOn]}
+                  style={[styles.dayPill, index === selectedDay && styles.dayPillOn]}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: index === day }}
+                  accessibilityState={{ selected: index === selectedDay }}
                 >
-                  <Text style={[styles.dayPillText, index === day && styles.dayPillTextOn]}>
+                  <Text style={[styles.dayPillText, index === selectedDay && styles.dayPillTextOn]}>
                     {label}
                   </Text>
                 </Pressable>
@@ -122,10 +134,15 @@ export function TraceScreen() {
             {/* Remounting per day and activity resets the scrubber to that slice's best
                 hour, which is what changing either was asking for. */}
             <Trace
-              key={`${activity}-${day}`}
+              key={`${activity}-${selectedDay}`}
               slice={slice}
               width={width}
               initialIndex={startAt}
+              nowIndex={
+                selectedDay === today && plan.now_index !== null
+                  ? plan.now_index - today * 24
+                  : null
+              }
             />
 
             <Text style={styles.legend}>

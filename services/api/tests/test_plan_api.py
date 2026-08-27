@@ -7,6 +7,7 @@ the wiring — not Open-Meteo, and not the network.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -40,14 +41,23 @@ BODY: dict[str, Any] = {
 }
 
 
-def build_forecast(*, age: timedelta = timedelta()) -> Forecast:
+def build_forecast(*, age: timedelta = timedelta(), shift: timedelta = timedelta()) -> Forecast:
+    """The recorded response, optionally aged or moved in time.
+
+    `age` changes only when it was fetched. `shift` moves the hours themselves, which is
+    a different thing — a forecast can be freshly fetched and still not cover now.
+    """
     payload = json.loads(FIXTURE.read_text())
     forecast = normalise(payload, Location(41.0082, 28.9784, "Europe/Istanbul"))
-    if not age:
+
+    hours = forecast.hours
+    if shift:
+        hours = tuple(replace(hour, hour_utc=hour.hour_utc + shift) for hour in forecast.hours)
+    if not age and not shift:
         return forecast
     return Forecast(
         location=forecast.location,
-        hours=forecast.hours,
+        hours=hours,
         fetched_at=datetime.now(UTC) - age,
     )
 
@@ -97,6 +107,8 @@ class TestPlanEndpoint:
             "hours",
             "windows",
             "blocker",
+            "days",
+            "now_index",
         }
 
     def test_windows_arrive_ranked(self) -> None:
@@ -151,6 +163,50 @@ class TestPlanEndpoint:
 
         assert morning_windows != evening_windows
         assert morning_windows[0]["start_hour"] != evening_windows[0]["start_hour"]
+
+
+class TestPlanDailySummaries:
+    """Someone who only wants the weather should not have to read a comfort score."""
+
+    def test_one_summary_per_day(self) -> None:
+        with client_with(StubWeather(build_forecast())) as client:
+            days = client.post("/plan", json=BODY).json()["days"]
+        assert len(days) == 3
+        assert [d["date"] for d in days] == sorted(d["date"] for d in days)
+
+    def test_a_summary_carries_the_headline_a_forecast_screen_needs(self) -> None:
+        with client_with(StubWeather(build_forecast())) as client:
+            day = client.post("/plan", json=BODY).json()["days"][0]
+        assert set(day) == {
+            "date",
+            "temp_min_c",
+            "temp_max_c",
+            "weather_code",
+            "precip_prob_max_pct",
+        }
+        assert day["temp_min_c"] <= day["temp_max_c"]
+
+    def test_now_points_at_the_hour_actually_in_progress(self) -> None:
+        """Resolved by the server, so the client never reasons about the location's zone."""
+        # Anchor the recorded hours to the present so the assertion is about the
+        # resolution and not about when the fixture happened to be recorded.
+        payload = json.loads(FIXTURE.read_text())
+        recorded = normalise(payload, Location(41.0082, 28.9784, "Europe/Istanbul"))
+        to_now = (
+            datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+            - recorded.hours[0].hour_utc
+        )
+
+        with client_with(StubWeather(build_forecast(shift=to_now))) as client:
+            body = client.post("/plan", json=BODY).json()
+
+        assert body["now_index"] == 0
+        assert datetime.fromisoformat(body["hours"][0]["hour_utc"]) <= datetime.now(UTC)
+
+    def test_now_is_null_when_the_forecast_does_not_reach_it(self) -> None:
+        """A freshly fetched forecast can still be about a week that has passed."""
+        with client_with(StubWeather(build_forecast(shift=timedelta(days=-30)))) as client:
+            assert client.post("/plan", json=BODY).json()["now_index"] is None
 
 
 class TestPlanEndpointRejects:

@@ -32,6 +32,14 @@ export const PlanResult = z.object({
   constraint: z.string(),
   hours: z.number().int().min(1),
 }).strict().nullable().optional(),
+  days: z.array(z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  temp_min_c: z.number(),
+  temp_max_c: z.number(),
+  weather_code: z.number().int(),
+  precip_prob_max_pct: z.number().int().min(0).max(100),
+}).strict()),
+  now_index: z.number().int().min(0).nullable().optional(),
 }).strict();
 
 export type PlanResult = z.infer<typeof PlanResult>;

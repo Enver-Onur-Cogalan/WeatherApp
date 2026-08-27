@@ -15,7 +15,8 @@
 
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { formatWindowSpan, type PlanResult, type Window } from "@/lib/plan";
+import { formatWindowSpan, type DaySummary, type PlanResult, type Window } from "@/lib/plan";
+import { conditionLabel, isSevere } from "@/lib/weather-code";
 import { colors, size, space, type } from "@/theme";
 
 const HOURS = 24;
@@ -27,30 +28,32 @@ type Day = {
   label: string;
   windows: Window[];
   best: Window | null;
+  summary: DaySummary;
 };
 
+/** Days come from the server's own grouping, so the grid and the trace never disagree
+ *  about where a day starts — which they would if the client re-derived it from UTC. */
 function groupByDay(plan: PlanResult): Day[] {
-  const order: string[] = [];
   const byDate = new Map<string, Window[]>();
-
-  for (const hour of plan.hours) {
-    const date = hour.hour_utc.slice(0, 10);
-    if (!byDate.has(date)) {
-      byDate.set(date, []);
-      order.push(date);
-    }
-  }
   for (const window of plan.windows) {
-    byDate.get(window.day)?.push(window);
+    const list = byDate.get(window.day) ?? [];
+    list.push(window);
+    byDate.set(window.day, list);
   }
 
-  return order.map((date) => {
-    const windows = (byDate.get(date) ?? []).sort((a, b) => a.start_hour - b.start_hour);
-    const [year, month, day] = date.split("-").map(Number);
+  return plan.days.map((summary, index) => {
+    const windows = (byDate.get(summary.date) ?? []).sort(
+      (a, b) => a.start_hour - b.start_hour,
+    );
+    const [year, month, day] = summary.date.split("-").map(Number);
     return {
-      date,
-      label: WEEKDAYS_SHORT[new Date(Date.UTC(year, month - 1, day)).getUTCDay()],
+      date: summary.date,
+      label:
+        index === 0
+          ? "Bugün"
+          : WEEKDAYS_SHORT[new Date(Date.UTC(year, month - 1, day)).getUTCDay()],
       windows,
+      summary,
       best: windows.reduce<Window | null>(
         (top, w) => (top === null || w.score > top.score ? w : top),
         null,
@@ -90,11 +93,12 @@ export function Week({
           onPress={() => onSelectDay(dayIndex)}
           style={styles.row}
           accessibilityRole="button"
-          accessibilityLabel={
-            day.best
-              ? `${day.label}, en iyi pencere ${formatWindowSpan(day.best)}`
-              : `${day.label}, pencere yok`
-          }
+          accessibilityLabel={[
+            day.label,
+            `${Math.round(day.summary.temp_max_c)} derece`,
+            conditionLabel(day.summary.weather_code),
+            day.best ? `en iyi pencere ${formatWindowSpan(day.best)}` : "pencere yok",
+          ].join(", ")}
         >
           <Text style={styles.day}>{day.label}</Text>
 
@@ -127,24 +131,33 @@ export function Week({
             ))}
           </View>
 
-          <Text style={styles.best}>
-            {day.best ? formatWindowSpan(day.best) : "—"}
-          </Text>
+          <View style={styles.meta}>
+            <Text style={styles.range}>
+              {Math.round(day.summary.temp_max_c)}°
+              <Text style={styles.low}>  {Math.round(day.summary.temp_min_c)}°</Text>
+            </Text>
+            <Text
+              style={[styles.condition, isSevere(day.summary.weather_code) && styles.severe]}
+              numberOfLines={1}
+            >
+              {conditionLabel(day.summary.weather_code)}
+            </Text>
+          </View>
         </Pressable>
       ))}
     </View>
   );
 }
 
-const GUTTER = 34;
-const BEST = 92;
+const GUTTER = 42;
+const META = 104;
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: space.lg },
 
   axis: { flexDirection: "row", alignItems: "center", paddingBottom: space.xs },
   gutter: { width: GUTTER },
-  axisTrack: { flex: 1, height: 12, marginRight: BEST },
+  axisTrack: { flex: 1, height: 12, marginRight: META },
   axisLabel: {
     ...type.label,
     fontSize: 9,
@@ -173,11 +186,9 @@ const styles = StyleSheet.create({
   tickMajor: { backgroundColor: colors.rule },
   burn: { position: "absolute", top: 0, bottom: 0, backgroundColor: colors.burn },
 
-  best: {
-    ...type.data,
-    fontSize: size.caption,
-    color: colors.ink,
-    width: BEST,
-    textAlign: "right",
-  },
+  meta: { width: META, alignItems: "flex-end", gap: 1 },
+  range: { ...type.data, fontSize: size.caption, color: colors.ink },
+  low: { color: colors.inkDim },
+  condition: { ...type.body, fontSize: 10, color: colors.inkDim },
+  severe: { color: colors.ember },
 });

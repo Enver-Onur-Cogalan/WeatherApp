@@ -15,11 +15,12 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.core.deps import WeatherDep
 from app.core.logging import get_logger
+from app.planning.daily import current_index, summarise_days
 from app.planning.models import Activity, ActivityProfile
 from app.planning.scoring import plan as run_plan
 from app.planning.scoring import score_hours
 from app.schemas.plan_request import PlanRequest
-from app.schemas.plan_result import Blocker, PlanResult, ScoredHour, Window
+from app.schemas.plan_result import Blocker, DaySummary, PlanResult, ScoredHour, Window
 from app.weather.client import ForecastUnavailableError
 from app.weather.models import Location
 
@@ -122,5 +123,18 @@ async def create_plan(request: PlanRequest, weather: WeatherDep) -> PlanResult:
             )
             for window in windows
         ],
+        days=[
+            DaySummary(
+                date=day.date,
+                temp_min_c=round(day.temp_min_c, 1),
+                temp_max_c=round(day.temp_max_c, 1),
+                weather_code=day.weather_code,
+                precip_prob_max_pct=day.precip_prob_max_pct,
+            )
+            for day in summarise_days(hours)
+        ],
+        # Resolved here so no screen has to work out what "now" means in the location's
+        # timezone, which is a different question from what it means on the device.
+        now_index=current_index(hours),
         blocker=Blocker(constraint=blocker[0], hours=blocker[1]) if blocker else None,
     )

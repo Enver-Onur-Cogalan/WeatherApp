@@ -5,66 +5,218 @@
   "description": "Everything the trace screen needs in one response: the scored hours it draws, the windows it ranks, and the constraint that closed the rest. No language model is involved in producing any of it.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["latitude", "longitude", "timezone", "fetched_at", "stale", "hours", "windows"],
+  "required": [
+    "latitude",
+    "longitude",
+    "timezone",
+    "fetched_at",
+    "stale",
+    "hours",
+    "windows",
+    "days"
+  ],
   "properties": {
-    "latitude": { "type": "number" },
-    "longitude": { "type": "number" },
-    "timezone": { "type": "string" },
-    "fetched_at": { "type": "string", "format": "date-time", "description": "When the forecast was retrieved. The client is required to show this — a forecast without a time on it is a lie." },
-    "stale": { "type": "boolean", "description": "True when this was served from an expired cache because the upstream was unreachable." },
+    "latitude": {
+      "type": "number"
+    },
+    "longitude": {
+      "type": "number"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "fetched_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the forecast was retrieved. The client is required to show this \u2014 a forecast without a time on it is a lie."
+    },
+    "stale": {
+      "type": "boolean",
+      "description": "True when this was served from an expired cache because the upstream was unreachable."
+    },
     "hours": {
       "type": "array",
       "description": "Every scored hour, in order. This is the trace.",
-      "items": { "$ref": "#/$defs/scoredHour" }
+      "items": {
+        "$ref": "#/$defs/scoredHour"
+      }
     },
     "windows": {
       "type": "array",
       "description": "Contiguous runs that clear the threshold, best first.",
-      "items": { "$ref": "#/$defs/window" }
+      "items": {
+        "$ref": "#/$defs/window"
+      }
     },
     "blocker": {
       "$ref": "#/$defs/blocker",
       "description": "The constraint that eliminated the most hours a person would actually have used, or null when nothing did."
+    },
+    "days": {
+      "type": "array",
+      "description": "One summary per day, so the screen can answer 'what is Thursday like' without the client aggregating hours itself.",
+      "items": {
+        "$ref": "#/$defs/daySummary"
+      }
+    },
+    "now_index": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "Index into `hours` for the hour happening now, or null when the forecast does not cover it. Current conditions are hours[now_index] \u2014 the server resolves 'now' so the client never has to reason about the location's timezone.",
+      "minimum": 0
     }
   },
   "$defs": {
     "scoredHour": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["hour_utc", "local_hour", "score", "excluded", "temperature_c", "precip_prob_pct", "wind_kmh", "uv_index", "cloud_cover_pct", "weather_code"],
+      "required": [
+        "hour_utc",
+        "local_hour",
+        "score",
+        "excluded",
+        "temperature_c",
+        "precip_prob_pct",
+        "wind_kmh",
+        "uv_index",
+        "cloud_cover_pct",
+        "weather_code"
+      ],
       "properties": {
-        "hour_utc": { "type": "string", "format": "date-time" },
-        "local_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
-        "score": { "type": "number", "minimum": 0, "maximum": 100 },
-        "excluded": { "type": "boolean", "description": "Severe weather removed this hour outright, regardless of profile." },
-        "worst_penalty": { "type": ["string", "null"], "description": "Which constraint cost this hour the most, for explaining a low score without inventing a reason." },
-        "temperature_c": { "type": "number" },
-        "precip_prob_pct": { "type": "integer" },
-        "wind_kmh": { "type": "number" },
-        "uv_index": { "type": "number" },
-        "cloud_cover_pct": { "type": "integer" },
-        "weather_code": { "type": "integer" }
+        "hour_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "local_hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "excluded": {
+          "type": "boolean",
+          "description": "Severe weather removed this hour outright, regardless of profile."
+        },
+        "worst_penalty": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Which constraint cost this hour the most, for explaining a low score without inventing a reason."
+        },
+        "temperature_c": {
+          "type": "number"
+        },
+        "precip_prob_pct": {
+          "type": "integer"
+        },
+        "wind_kmh": {
+          "type": "number"
+        },
+        "uv_index": {
+          "type": "number"
+        },
+        "cloud_cover_pct": {
+          "type": "integer"
+        },
+        "weather_code": {
+          "type": "integer"
+        }
       }
     },
     "window": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["day", "start_hour", "end_hour", "score", "length_hours"],
+      "required": [
+        "day",
+        "start_hour",
+        "end_hour",
+        "score",
+        "length_hours"
+      ],
       "properties": {
-        "day": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-        "start_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
-        "end_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
-        "score": { "type": "number", "minimum": 0, "maximum": 100 },
-        "length_hours": { "type": "integer", "minimum": 1 }
+        "day": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "start_hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "end_hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "length_hours": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "blocker": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "additionalProperties": false,
-      "required": ["constraint", "hours"],
+      "required": [
+        "constraint",
+        "hours"
+      ],
       "properties": {
-        "constraint": { "type": "string", "description": "temperature, wind, precipitation, uv, or severe_weather. Never time_of_day — that is not weather." },
-        "hours": { "type": "integer", "minimum": 1 }
+        "constraint": {
+          "type": "string",
+          "description": "temperature, wind, precipitation, uv, or severe_weather. Never time_of_day \u2014 that is not weather."
+        },
+        "hours": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "daySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date",
+        "temp_min_c",
+        "temp_max_c",
+        "weather_code",
+        "precip_prob_max_pct"
+      ],
+      "properties": {
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "temp_min_c": {
+          "type": "number"
+        },
+        "temp_max_c": {
+          "type": "number"
+        },
+        "weather_code": {
+          "type": "integer",
+          "description": "The day's headline condition: the most significant WMO code during daylight hours. WMO orders codes roughly by severity, so a thunderstorm outranks cloud and a 03:00 fog never headlines a sunny day."
+        },
+        "precip_prob_max_pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
       }
     }
   }

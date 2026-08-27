@@ -83,6 +83,7 @@ The main screen. Top to bottom:
 ```
 ┌──────────────────────────────────┐
 │ İstanbul  ⌄            14 dk önce│  location switcher · freshness
+│ 24°  Parçalı bulutlu   ↑29° ↓21° │  current conditions, one glance
 │                                  │
 │ CUMARTESİ                        │  verdict — a span, not a number
 │ 06:00–11:00                      │

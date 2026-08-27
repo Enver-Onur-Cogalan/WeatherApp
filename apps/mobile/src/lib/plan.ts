@@ -31,6 +31,14 @@ export type Window = {
   length_hours: number;
 };
 
+export type DaySummary = {
+  date: string;
+  temp_min_c: number;
+  temp_max_c: number;
+  weather_code: number;
+  precip_prob_max_pct: number;
+};
+
 export type PlanResult = {
   latitude: number;
   longitude: number;
@@ -39,6 +47,10 @@ export type PlanResult = {
   stale: boolean;
   hours: ScoredHour[];
   windows: Window[];
+  days: DaySummary[];
+  /** The hour happening now, resolved by the server so the client never handles the
+   *  location's timezone. Null when the forecast does not cover it. */
+  now_index: number | null;
   blocker: { constraint: string; hours: number } | null;
 };
 
@@ -90,6 +102,7 @@ export type TraceSlice = {
   wind: number[];
   precipitation: number[];
   uv: number[];
+  weatherCodes: number[];
   excluded: number[];
   /** Index pairs of the runs that clear the threshold, flattened: [startA, endA, startB, …]. */
   burns: number[];
@@ -132,6 +145,7 @@ export function sliceFor(plan: PlanResult, span: Span, dayOffset = 0): TraceSlic
     wind: hours.map((h) => h.wind_kmh),
     precipitation: hours.map((h) => h.precip_prob_pct),
     uv: hours.map((h) => h.uv_index),
+    weatherCodes: hours.map((h) => h.weather_code),
     burns: findBurns(scores, excluded),
   };
 }
@@ -158,17 +172,28 @@ export function bestHourIndex(plan: PlanResult, slice: TraceSlice, dayOffset = 0
 
 const WEEKDAYS_SHORT = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
 
-/** Short day names for the day strip, in the order the forecast returned them. */
+function weekdayShort(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return WEEKDAYS_SHORT[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+}
+
+/** Short day names for the day strip, taken from the server's own day grouping. */
 export function dayLabels(plan: PlanResult): string[] {
-  const seen: string[] = [];
-  for (const hour of plan.hours) {
-    const date = hour.hour_utc.slice(0, 10);
-    if (!seen.includes(date)) seen.push(date);
-  }
-  return seen.map((date) => {
-    const [year, month, day] = date.split("-").map(Number);
-    return WEEKDAYS_SHORT[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-  });
+  return plan.days.map((day, index) => (index === 0 ? "Bugün" : weekdayShort(day.date)));
+}
+
+/** Conditions right now, or null when the forecast does not reach the present. */
+export function currentHour(plan: PlanResult): ScoredHour | null {
+  if (plan.now_index === null) return null;
+  return plan.hours[plan.now_index] ?? null;
+}
+
+/** Which day the current hour falls in, for opening the trace where the person is. */
+export function currentDayIndex(plan: PlanResult): number {
+  const now = currentHour(plan);
+  if (!now) return 0;
+  const index = plan.days.findIndex((d) => d.date === now.hour_utc.slice(0, 10));
+  return index >= 0 ? index : 0;
 }
 
 /** "Cumartesi 06:00–11:00" — the verdict, which is a span rather than a number. */
