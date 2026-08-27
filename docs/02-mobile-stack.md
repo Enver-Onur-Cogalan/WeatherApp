@@ -31,14 +31,22 @@ the line is drawn once here:
 |---|---|---|
 | İz, Sor | Custom, from our tokens | The trace, the burn, the verdict typography — this is where the design carries meaning, and a native control would flatten it |
 | Sen, pickers, sheets, form controls | `@expo/ui` native components | A settings screen has no thesis. Platform convention serves the user better than our opinion does |
-| Tab bar | `NativeTabs`, trimmed | Native, but `labelVisibilityMode: "selected"` — a full Material 3 bar is tall enough to fight a screen built around a hairline instrument |
+| Tab bar | Custom, compact | See the exception below — `NativeTabs` exposes no height, and Material 3's 80dp is a block of another design language under a hairline screen |
 
 The rule: **custom where the design says something, native where it would only say
 "we styled this ourselves".**
 
-Native does not mean untouched. Where the platform's default is loud enough to argue
-with the design — the height of a Material 3 tab bar — it gets trimmed through the
-options the component already offers, rather than replaced with our own.
+**The exception, and what it costs.** Native unless the platform default is materially
+wrong for the design *and* the component offers no way to adjust it. The tab bar is the
+one place that applies so far: `NativeTabs` exposes no height, Material 3's is 80dp, and
+`labelVisibilityMode` trimmed it without being enough. It is custom now, at 46dp plus the
+safe-area inset.
+
+That is a cost, not a free win. The platform's ripple, its translucency and its own
+accessibility handling all become ours to reproduce, and every one we forget is a
+regression nobody will file. The custom bar carries explicit roles and selected states
+for exactly that reason, and honours `preventDefault` on a tab press so a screen can
+still intercept its own tab — scroll-to-top, or discarding a draft before leaving.
 
 **Icons need both platforms named.** SF Symbols exist only on iOS, and setting only
 `sf` shipped an Android tab bar with no icons at all. Every native icon slot takes an

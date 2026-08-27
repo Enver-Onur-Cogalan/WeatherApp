@@ -5,13 +5,13 @@ import {
 } from "@expo-google-fonts/archivo";
 import { ArchivoBlack_400Regular } from "@expo-google-fonts/archivo-black";
 import { IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
-import { ThemeProvider } from "expo-router";
+import { Tabs, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import AppTabs from "@/components/app-tabs";
+import { TabBar } from "@/components/tab-bar";
 import { colors } from "@/theme";
 
 SplashScreen.preventAutoHideAsync();
@@ -59,7 +59,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.ground }}>
       <ThemeProvider value={instrumentTheme}>
         <StatusBar style="light" />
-        <AppTabs />
+        <Tabs
+          tabBar={(props) => <TabBar {...props} />}
+          screenOptions={{
+            headerShown: false,
+            sceneStyle: { backgroundColor: colors.ground },
+            // Tabs are peers, not a hierarchy — sliding between them implies a depth
+            // that is not there, and the user pays for it dozens of times a session.
+            animation: "none",
+          }}
+        />
       </ThemeProvider>
     </GestureHandlerRootView>
   );
