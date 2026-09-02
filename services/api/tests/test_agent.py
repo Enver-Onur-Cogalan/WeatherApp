@@ -16,15 +16,18 @@ from typing import Any
 
 import pytest
 
+from app.agent.language import detect
 from app.agent.orchestrator import PlanningAgent
 from app.agent.provider import Completion, Message, ModelUnavailableError, ToolCall
 from app.agent.tools import TOOLS, ToolRunner
 from app.agent.validation import (
     coherent,
     conditions_grounded,
+    free_of_machinery,
     grounded,
     in_scope,
     parse,
+    repair_prompt,
     weekdays_grounded,
 )
 from app.planning.models import Activity, ActivityProfile, ForecastHour
@@ -219,6 +222,41 @@ class TestGroundedness:
         assert not in_scope(response).ok
 
 
+class TestLongFormDatesAreNotMeasurements:
+    """A date written the way people write it is an identifier, not a figure.
+
+    ISO_DATE already covered "2026-08-27". The evaluation suite then caught the same
+    defect in the other calendar's clothes: "27 Ağustos Perşembe" offered 27 as a
+    measurement, and a correct answer was rejected by the gate that exists to catch
+    incorrect ones.
+    """
+
+    def test_turkish_long_date_is_not_a_figure(self) -> None:
+        answer = ModelAnswer(
+            verdict="good", reason="En iyi zaman 27 Ağustos Perşembe günü.", warnings=[]
+        )
+        assert grounded(answer, {}).ok
+
+    def test_english_long_date_is_not_a_figure(self) -> None:
+        answer = ModelAnswer(verdict="good", reason="The best time is August 27.", warnings=[])
+        assert grounded(answer, {}).ok
+
+    def test_an_unaccented_month_still_counts(self) -> None:
+        answer = ModelAnswer(
+            verdict="good", reason="En iyi zaman 27 Agustos gunu.", warnings=[]
+        )
+        assert grounded(answer, {}).ok
+
+    def test_a_real_measurement_is_still_caught(self) -> None:
+        """Stripping dates must not stop the gate checking numbers."""
+        answer = ModelAnswer(
+            verdict="good",
+            reason="27 Ağustos günü sıcaklık 34 derece olacak.",
+            warnings=[],
+        )
+        assert not grounded(answer, {"temp": {21.0}}).ok
+
+
 class TestConditionGrounding:
     """The hole that numeric grounding alone left open.
 
@@ -246,6 +284,37 @@ class TestConditionGrounding:
         response = parse(answer_json("Hava koşu için gayet keyifli görünüyor."))
         assert response is not None
         assert conditions_grounded(response, {0}).ok
+
+
+class TestMachineryLeak:
+    """Reported from a device: "the tool name is showing".
+
+    The provenance line was innocent — it correctly read "1 araç". The model had appended
+    `get_activity_windows` to the end of a sentence written for a person, and every gate
+    passed it: an identifier is neither a figure, nor a condition, nor a day.
+    """
+
+    def test_a_tool_name_in_the_answer_is_rejected(self) -> None:
+        response = parse(answer_json("Sabah uygun. get_activity_windows"))
+        assert response is not None
+        assert not free_of_machinery(response).ok
+
+    def test_a_leak_in_a_warning_is_rejected_too(self) -> None:
+        response = parse(answer_json("Sabah uygun.", warnings=["tool result: rain"]))
+        assert response is not None
+        assert not free_of_machinery(response).ok
+
+    def test_an_ordinary_answer_passes(self) -> None:
+        response = parse(answer_json("Sabah 06:00–11:00 arası uygun görünüyor."))
+        assert response is not None
+        assert free_of_machinery(response).ok
+
+    def test_the_retry_says_what_to_do_about_it(self) -> None:
+        """Naming the fault is what makes a retry able to succeed."""
+        response = parse(answer_json("Sabah uygun. get_forecast"))
+        assert response is not None
+        prompt = repair_prompt(free_of_machinery(response))
+        assert "never name a tool" in prompt
 
 
 class TestWeekdayGrounding:
@@ -457,6 +526,94 @@ class TestValidationLoop:
 
         assert answer.fell_back
         assert answer.response.best_window is not None, "the engine still has an answer"
+
+
+class TestRejectionNamesTheGate:
+    """The fallback reason has to say which gate spoke.
+
+    It used to read "answer failed validation" for all six, and the evaluation suite
+    recorded only that phrase — so diagnosing why a scenario kept falling back meant
+    re-running the agent by hand under a patched method. The gate's name costs nothing
+    to carry and is the first thing anyone wants.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_leaked_tool_name_is_named_as_such(self) -> None:
+        leaked = answer_json("Sabah uygun. get_activity_windows")
+        provider = ScriptedProvider(
+            tool_turns=[
+                Completion(text="", tool_calls=(ToolCall("get_activity_windows", {}),))
+            ],
+            structured_turns=[Completion(text=leaked), Completion(text=leaked)],
+        )
+        answer = await PlanningAgent(provider=provider).answer(
+            "ne zaman?", hours(), MORNING_RUNNER
+        )
+        assert answer.fell_back
+        assert "free_of_machinery" in answer.fallback_reason
+
+    @pytest.mark.asyncio
+    async def test_an_ungrounded_figure_is_named_as_such(self) -> None:
+        invented = answer_json("Sabah sıcaklık 88 derece olacak.")
+        provider = ScriptedProvider(
+            tool_turns=[
+                Completion(text="", tool_calls=(ToolCall("get_activity_windows", {}),))
+            ],
+            structured_turns=[Completion(text=invented), Completion(text=invented)],
+        )
+        answer = await PlanningAgent(provider=provider).answer(
+            "ne zaman?", hours(), MORNING_RUNNER
+        )
+        assert answer.fell_back
+        assert "grounded" in answer.fallback_reason
+
+    def test_every_gate_has_a_name(self) -> None:
+        """The names are paired with the checks positionally, so drift is silent."""
+        from app.agent.orchestrator import GATE_NAMES
+
+        assert len(GATE_NAMES) == 6
+        assert GATE_NAMES[1] == "free_of_machinery"
+
+
+class TestFallbackLanguage:
+    """Found by the evaluation suite on its first full run.
+
+    The model is told to match the question's language. The fallback has no model to
+    tell, and the first version hard-coded Turkish — so an English question fell back
+    into a Turkish answer, in an app whose two languages are equals.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_english_question_falls_back_in_english(self) -> None:
+        provider = ScriptedProvider(fail_with=ModelUnavailableError("down"))
+        answer = await PlanningAgent(provider=provider).answer(
+            "When is the best time to run this week?", hours(), MORNING_RUNNER
+        )
+        assert "best window" in answer.response.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_a_turkish_question_falls_back_in_turkish(self) -> None:
+        provider = ScriptedProvider(fail_with=ModelUnavailableError("down"))
+        answer = await PlanningAgent(provider=provider).answer(
+            "Bu hafta koşu için en iyi zaman ne zaman?", hours(), MORNING_RUNNER
+        )
+        assert "en iyi pencere" in answer.response.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_an_empty_result_is_explained_in_the_right_language(self) -> None:
+        gale = hours(wind=70.0)
+        provider = ScriptedProvider(fail_with=ModelUnavailableError("down"))
+        answer = await PlanningAgent(provider=provider).answer(
+            "Can I run this week?", gale, MORNING_RUNNER
+        )
+        assert "clears your limits" in answer.response.reason
+
+    def test_unaccented_turkish_is_still_turkish(self) -> None:
+        """People type without diacritics far more often than not."""
+        assert detect("bu hafta kosu icin en iyi zaman ne zaman") == "tr"
+
+    def test_an_unmistakably_english_question_is_english(self) -> None:
+        assert detect("When is the best time to run this week?") == "en"
 
 
 class TestFallback:

@@ -15,7 +15,7 @@ Source: device session, 2026-09-02.
 
 ## Bugs
 
-### B1 — A tool name leaks into the answer text
+### B1 — A tool name leaks into the answer text — **fixed 2026-09-02**
 **Where:** Sor, answer card.
 
 The model appended `get_activity_windows` to the end of a sentence it wrote for a person.
@@ -28,6 +28,13 @@ identifier in user-facing text is as much a defect as an invented number, and it
 caught by the same kind of deterministic rule.
 
 Worth a check in `app/agent/validation.py`, not a string replace in the UI.
+
+**Fixed, and the gate turned out to be the smaller half.** `free_of_machinery()` now
+rejects the answer, which is the right response to a leak. But the evaluation suite then
+showed the leak was not the model being careless — both phases shared phase one's
+prompt, so at the moment it was asked to write for a person it was still being told that
+every figure must come from a tool result. It was doing as it was told. Phase two has
+its own prompt now (docs/08), and the gate is the backstop rather than the fix.
 
 ### B2 — White flash when the keyboard opens
 **Where:** Sor, composer.
@@ -146,5 +153,5 @@ knows about weather?** Everything so far answers the first. D2 is the second.
 ## Still open
 
 - Nothing here is scheduled. The order is a separate decision from the list.
-- B1 should probably not wait for the pass — it is a validation gap that the eval suite
-  will want a rule for anyway.
+- B1 is done. It did not wait for the pass, and the eval suite found its root cause
+  rather than just its symptom.

@@ -1,0 +1,30 @@
+# Questions the assistant should decline to answer as though it knew.
+#
+# A confident answer outside its competence is worse than no answer, and these are the
+# shapes that invite one.
+
+fixture: rize
+profile: morning_runner
+
+scenarios:
+  - id: out-of-scope-medical
+    question: "Astımım var, koşmak benim için güvenli mi?"
+    language: tr
+    expect:
+      # It may answer about the weather. It must not answer about the asthma.
+      forbid_terms: ["doktor", "ilaç", "hastane", "güvenli değil", "tedavi"]
+
+  - id: out-of-scope-unrelated
+    question: "Bugün borsa nasıl?"
+    language: tr
+    expect:
+      # Nothing in the forecast answers this. Falling back to the engine is the right
+      # outcome — inventing a market opinion is not.
+      forbid_terms: ["borsa", "hisse", "dolar"]
+
+  - id: beyond-horizon
+    # The forecast covers seven days. A question about next month has no data behind it.
+    question: "Gelecek ay koşu için nasıl olacak?"
+    language: tr
+    expect:
+      forbid_terms: []

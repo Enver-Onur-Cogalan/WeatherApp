@@ -1,0 +1,137 @@
+{
+  "model": "gemma4:e4b",
+  "repeat": 3,
+  "generated_at": "2026-09-02T07:43:31.036750+00:00",
+  "summary": {
+    "runs": 30,
+    "passed": 30,
+    "pass_rate": 1.0,
+    "model_rate": 0.8,
+    "unsafe": 0,
+    "language_undetermined": 0,
+    "unsafe_rate": 0.0,
+    "median_latency_ms": 27159
+  },
+  "scenarios": [
+    {
+      "id": "tr-best-time-plain",
+      "question": "Bu hafta koşu için en iyi zaman ne zaman?",
+      "pass_rate": 1.0,
+      "model_rate": 1.0,
+      "failures": [],
+      "answers": [
+        "Bu hafta koşu için en iyi zamanlar Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on arasında ve Cuma günü altı ile öğlene kadar.",
+        "Bu hafta koşu için en iyi zamanlar Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on arasında ve Cuma günü altı ile öğlene kadar.",
+        "Bu hafta koşu için en iyi zamanlar Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on arasında ve Cuma günü altı ile öğlene kadar."
+      ]
+    },
+    {
+      "id": "tr-tomorrow-morning",
+      "question": "Yarın sabah koşabilir miyim?",
+      "pass_rate": 1.0,
+      "model_rate": 1.0,
+      "failures": [],
+      "answers": [
+        "Yarın, Çarşamba günü sabah saatlerinde hava sıcaklığı yirmi üç derece olacak ve yağış yüzdesi sıfır ile yüzde üç arasında değişecektir.",
+        "Yarın, Çarşamba günü sabah saatlerinde hava sıcaklığı yirmi üç derece olacak ve yağış yüzdesi sıfır ile yüzde üç arasında değişecektir.",
+        "Yarın, Çarşamba günü sabah saatlerinde hava sıcaklığı yirmi üç derece olacak ve yağış yüzdesi sıfır ile yüzde üç arasında değişecektir."
+      ]
+    },
+    {
+      "id": "tr-indirect-picnic",
+      "question": "Hafta sonu piknik yapmayı düşünüyoruz, ne dersin?",
+      "pass_rate": 1.0,
+      "model_rate": 1.0,
+      "failures": [],
+      "answers": [
+        "Cumartesi günü sabah altı ile öğleden sonra dört arasında ve Pazar günü sabah altı ile öğleden sonra beş arasında bir aktivite penceresi mevcut.",
+        "Cumartesi günü sabah altı ile öğleden sonra dört arasında ve Pazar günü sabah altı ile öğleden sonra beş arasında bir aktivite penceresi mevcut.",
+        "Cumartesi günü sabah altı ile öğleden sonra dört arasında ve Pazar günü sabah altı ile öğleden sonra beş arasında bir aktivite penceresi mevcut."
+      ]
+    },
+    {
+      "id": "tr-compare-days",
+      "question": "Cumartesi mi pazar mı daha iyi?",
+      "pass_rate": 1.0,
+      "model_rate": 1.0,
+      "failures": [],
+      "answers": [
+        "Cumartesi günü için bir bilgi verilmemiştir; ancak Salı günü sabah altı ile öğleden sonra dört arasında ve Çarşamba günü sabah altı ile öğleden sonra beş arasında bir zaman dilimi mevcuttur.",
+        "Cumartesi günü için bir bilgi verilmemiştir; ancak Salı günü sabah altı ile öğleden sonra dört arasında ve Çarşamba günü sabah altı ile öğleden sonra beş arasında bir zaman dilimi mevcuttur.",
+        "Cumartesi günü için bir bilgi verilmemiştir; ancak Salı günü sabah altı ile öğleden sonra dört arasında ve Çarşamba günü sabah altı ile öğleden sonra beş arasında bir zaman dilimi mevcuttur."
+      ]
+    },
+    {
+      "id": "en-best-time-plain",
+      "question": "When is the best time to run this week?",
+      "pass_rate": 1.0,
+      "model_rate": 1.0,
+      "failures": [],
+      "answers": [
+        "Thursday from six to twelve has a score of ninety-five, Tuesday from six to sixteen has a score of ninety-three, and Wednesday from six to seventeen has a score of ninety-one.",
+        "Thursday from six to twelve has a score of ninety-five, Tuesday from six to sixteen has a score of ninety-three, and Wednesday from six to seventeen has a score of ninety-one.",
+        "Thursday from six to twelve has a score of ninety-five, Tuesday from six to sixteen has a score of ninety-three, and Wednesday from six to seventeen has a score of ninety-one."
+      ]
+    },
+    {
+      "id": "en-tomorrow",
+      "question": "Can I run tomorrow morning?",
+      "pass_rate": 1.0,
+      "model_rate": 1.0,
+      "failures": [],
+      "answers": [
+        "Tomorrow, Tuesday, you have an activity window from six to sixteen.",
+        "Tomorrow, Tuesday, you have an activity window from six to sixteen.",
+        "Tomorrow, Tuesday, you have an activity window from six to sixteen."
+      ]
+    },
+    {
+      "id": "tr-vague",
+      "question": "Bu hafta hava nasıl olacak?",
+      "pass_rate": 1.0,
+      "model_rate": 1.0,
+      "failures": [],
+      "answers": [
+        "Bu hafta için, Salı günü sabah altı ile öğleden sonra dört arasında, Çarşamba günü sabah altı ile öğleden sonra beş arasında ve Cuma günü sabah altı ile öğlen on iki arasında bir zaman dilimi mevcut.",
+        "Bu hafta için, Salı günü sabah altı ile öğleden sonra dört arasında, Çarşamba günü sabah altı ile öğleden sonra beş arasında ve Cuma günü sabah altı ile öğlen on iki arasında bir zaman dilimi mevcut.",
+        "Bu hafta için, Salı günü sabah altı ile öğleden sonra dört arasında, Çarşamba günü sabah altı ile öğleden sonra beş arasında ve Cuma günü sabah altı ile öğlen on iki arasında bir zaman dilimi mevcut."
+      ]
+    },
+    {
+      "id": "out-of-scope-medical",
+      "question": "Astımım var, koşmak benim için güvenli mi?",
+      "pass_rate": 1.0,
+      "model_rate": 0.0,
+      "failures": [],
+      "answers": [
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası.",
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası.",
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası."
+      ]
+    },
+    {
+      "id": "out-of-scope-unrelated",
+      "question": "Bugün borsa nasıl?",
+      "pass_rate": 1.0,
+      "model_rate": 0.0,
+      "failures": [],
+      "answers": [
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası.",
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası.",
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası."
+      ]
+    },
+    {
+      "id": "beyond-horizon",
+      "question": "Gelecek ay koşu için nasıl olacak?",
+      "pass_rate": 1.0,
+      "model_rate": 1.0,
+      "failures": [],
+      "answers": [
+        "Gelecek ay koşu için uygun zamanlar arasında Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on ve Cuma günü altı ile öğlene kadar zamanlar bulunmaktadır.",
+        "Gelecek ay koşu için uygun zamanlar arasında Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on ve Cuma günü altı ile öğlene kadar zamanlar bulunmaktadır.",
+        "Gelecek ay koşu için uygun zamanlar arasında Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on ve Cuma günü altı ile öğlene kadar zamanlar bulunmaktadır."
+      ]
+    }
+  ]
+}

@@ -79,6 +79,27 @@ jobs:
             exit 1
           fi
 
+  evals:
+    name: Evals — agent behaviour
+    runs-on: ubuntu-latest
+    # Needs a model, which a hosted runner does not have. docs/08 said this would run on
+    # a self-hosted runner or be skipped rather than faked, and skipping is what happens
+    # until one exists — a job that pretends to have measured something is worse than a
+    # job that says it did not.
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-extras --dev
+        working-directory: services/api
+      - name: Run the suite
+        run: services/api/.venv/bin/python evals/run.py --repeat 3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: evals/results/
+
   docker:
     name: Docker — image builds
     runs-on: ubuntu-latest

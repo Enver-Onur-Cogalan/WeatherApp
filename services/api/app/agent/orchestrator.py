@@ -23,6 +23,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.agent.language import Language, detect
 from app.agent.provider import Completion, Message, ModelUnavailableError, Provider
 from app.agent.tools import (
     TOOL_NAMES,
@@ -36,6 +37,7 @@ from app.agent.tools import (
 from app.agent.validation import (
     coherent,
     conditions_grounded,
+    free_of_machinery,
     grounded,
     in_scope,
     parse,
@@ -51,6 +53,16 @@ from app.schemas.plan_response import PlanResponse
 from app.schemas.plan_response import Window as ResponseWindow
 
 logger = get_logger(__name__)
+
+GATE_NAMES = (
+    "in_scope",
+    "free_of_machinery",
+    "coherent",
+    "grounded",
+    "conditions_grounded",
+    "weekdays_grounded",
+)
+"""Named in the order they are evaluated, so a rejection can say which one spoke."""
 
 MAX_TOOL_ROUNDS = 2
 """How many times the model may call tools before we stop asking.
@@ -73,6 +85,26 @@ model it *has no data of its own* and must call something produced 4 of 4 — sa
 same tools, same questions. The 75% in docs/05 was measured with a neutral prompt and is
 not a fixed property of the model; a large part of what looked like weak tool calling
 was the prompt declining to insist.
+"""
+
+COMPOSE_SYSTEM = (
+    "You are writing one short answer for a person who asked about the weather. "
+    "The facts you were given are already true — state them, do not explain where they "
+    "came from. Never mention tools, results, scores, fields or data sources: the "
+    "reader knows none of those words and does not want them. Write plainly, in the "
+    "same language as the question, and invent no number."
+)
+"""Phase two's prompt, which for a while did not exist.
+
+Both phases shared phase one's prompt, so at the moment the model was asked to write for
+a person it was still being told to call a tool and that every figure must come from a
+tool result. It duly wrote sentences like "Tool result (get_activity_windows)
+kullanılarak cevap verilmiştir." The machinery gate caught them and the answer fell back
+every time — safe, and wrong for the obvious reason: we asked for the plumbing and then
+rejected the answer for mentioning it.
+
+Two prompts because the phases want opposite things. Phase one insists on tools; phase
+two must not know they exist.
 """
 
 STRUCTURE = (
@@ -127,6 +159,7 @@ class PlanningAgent:
         self, question: str, hours: list[ForecastHour], profile: ActivityProfile
     ) -> AgentAnswer:
         started = time.perf_counter()
+        language = detect(question)
         runner = ToolRunner(hours, profile)
         # Figures the engine stands behind regardless of which tools the model chose,
         # so a correct answer is not rejected for citing one the model never asked for.
@@ -140,7 +173,9 @@ class PlanningAgent:
             gathered = await self._gather(question, runner, facts, called)
         except ModelUnavailableError as exc:
             logger.warning("agent.model_unavailable", error=str(exc))
-            return self._fallback(hours, profile, elapsed(), "assistant unreachable", called)
+            return self._fallback(
+                hours, profile, elapsed(), "assistant unreachable", called, language
+            )
 
         # Ranked by the engine, before the model says anything about them.
         ranked, _ = plan(hours, profile)
@@ -162,19 +197,29 @@ class PlanningAgent:
             # Composing anyway produced answers like "no tool results were provided",
             # which is honest and useless — the deterministic path already has the
             # answer, and this is routing rather than failure (docs/06).
-            return self._fallback(hours, profile, elapsed(), "no tools were called", called)
+            return self._fallback(
+                hours, profile, elapsed(), "no tools were called", called, language
+            )
 
         try:
-            answer = await self._compose(
+            answer, rejection = await self._compose(
                 question, gathered, facts, codes, dates, window, elapsed, called
             )
         except ModelUnavailableError as exc:
             logger.warning("agent.model_unavailable", error=str(exc))
-            return self._fallback(hours, profile, elapsed(), "assistant unreachable", called)
+            return self._fallback(
+                hours, profile, elapsed(), "assistant unreachable", called, language
+            )
 
         if answer is not None:
             return answer
-        return self._fallback(hours, profile, elapsed(), "answer failed validation", called)
+        # Which gate, in the reason itself. "answer failed validation" told us a
+        # fallback had happened and nothing about why; the evaluation suite recorded
+        # only that phrase, so diagnosing a regression meant re-running the agent by
+        # hand under a patched method. The gate's name costs nothing to carry.
+        return self._fallback(
+            hours, profile, elapsed(), f"rejected: {rejection}", called, language
+        )
 
     # ------------------------------------------------------------------ phase one
 
@@ -235,8 +280,10 @@ class PlanningAgent:
         window: ResponseWindow | None,
         elapsed: Any,
         called: list[str],
-    ) -> AgentAnswer | None:
+    ) -> tuple[AgentAnswer | None, str]:
         """Constrained decoding into the response schema, with one repair attempt.
+
+        Returns the answer, or nothing and the reason the last attempt was rejected.
 
         The retry is fed the specific figures that failed rather than a generic
         complaint, which is the difference between a retry that can succeed and one that
@@ -246,14 +293,19 @@ class PlanningAgent:
         # engine afterwards — an earlier version let the model emit one, and it answered
         # with `best_window: null` while the engine had ranked seven (ADR-0007).
         schema = ModelAnswer.model_json_schema()
-        messages = [Message("system", SYSTEM), Message("user", _fold(question, gathered))]
+        messages = [
+            Message("system", COMPOSE_SYSTEM),
+            Message("user", _fold(question, gathered)),
+        ]
 
+        rejection = "no attempt was made"
         for attempt in range(2):
             completion = await self.provider.structured(messages, schema, think=False)
             response = parse(completion.text)
 
             if response is None:
                 logger.warning("agent.unparseable", attempt=attempt)
+                rejection = "unparseable JSON"
                 messages.append(
                     Message("user", "Your previous reply was not valid JSON. Answer again.")
                 )
@@ -261,14 +313,18 @@ class PlanningAgent:
 
             checks = (
                 in_scope(response),
+                free_of_machinery(response),
                 coherent(response, window),
                 grounded(response, facts),
                 conditions_grounded(response, codes),
                 weekdays_grounded(response, dates),
             )
-            for verdict in checks:
+            for name, verdict in zip(GATE_NAMES, checks, strict=True):
                 if not verdict.ok:
-                    logger.warning("agent.rejected", attempt=attempt, reason=verdict.reason)
+                    logger.warning(
+                        "agent.rejected", attempt=attempt, gate=name, reason=verdict.reason
+                    )
+                    rejection = f"{name} ({verdict.reason})"
                     messages.append(Message("user", repair_prompt(verdict)))
                     break
             else:
@@ -282,9 +338,9 @@ class PlanningAgent:
                     tool_calls=tuple(called),
                     duration_ms=elapsed(),
                     fell_back=False,
-                )
+                ), ""
 
-        return None
+        return None, rejection
 
     # ------------------------------------------------------------------ fallback
 
@@ -295,27 +351,43 @@ class PlanningAgent:
         duration_ms: int,
         reason: str,
         called: list[str],
+        language: Language = "tr",
     ) -> AgentAnswer:
-        """The engine's own answer, in a sentence.
+        """The engine's own answer, in a sentence, in the language that was asked.
 
         Built entirely from the scoring engine, so it is correct by construction. The
         user is not told the assistant failed — they are given the answer, which is what
-        they asked for. What went wrong belongs in the logs.
+        they asked for, and what went wrong belongs in the logs.
+
+        The language matters here in a way it does not for the model, which is simply
+        told to match the question. This path has no model to tell, and the first version
+        hard-coded Turkish — so an English question fell back into a Turkish answer. The
+        evaluation suite found it on its first full run.
         """
         windows, blocker = plan(hours, profile)
         logger.info("agent.fallback", reason=reason, windows=len(windows))
 
         if not windows:
-            detail = (
-                f"{blocker[0]} sınırın tek başına {blocker[1]} saati eledi."
-                if blocker
-                else "Uygun bir saat bulunamadı."
-            )
+            if language == "en":
+                detail = (
+                    f"Your {blocker[0]} limit alone ruled out {blocker[1]} hours."
+                    if blocker
+                    else "No suitable hour was found."
+                )
+                empty = f"No window clears your limits. {detail}"
+            else:
+                detail = (
+                    f"{blocker[0]} sınırın tek başına {blocker[1]} saati eledi."
+                    if blocker
+                    else "Uygun bir saat bulunamadı."
+                )
+                empty = f"Sınırlarını geçen bir pencere yok. {detail}"
+
             return AgentAnswer(
                 response=PlanResponse(
                     verdict="bad",
                     best_window=None,
-                    reason=f"Sınırlarını geçen bir pencere yok. {detail}",
+                    reason=empty,
                     warnings=[],
                 ),
                 tool_calls=tuple(called),
@@ -335,8 +407,13 @@ class PlanningAgent:
                     score=round(best.mean_score, 1),
                 ),
                 reason=(
-                    f"En iyi pencere {best.day} günü "
-                    f"{best.start_hour:02d}:00–{best.end_hour:02d}:00 arası."
+                    f"The best window is {best.day}, "
+                    f"{best.start_hour:02d}:00–{best.end_hour:02d}:00."
+                    if language == "en"
+                    else (
+                        f"En iyi pencere {best.day} günü "
+                        f"{best.start_hour:02d}:00–{best.end_hour:02d}:00 arası."
+                    )
                 ),
                 warnings=[],
             ),

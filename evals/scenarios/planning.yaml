@@ -1,0 +1,55 @@
+# Planning questions — the tier the assistant exists for.
+#
+# Every scenario runs against a recorded forecast, so a result never changes because the
+# weather did. What varies between runs is the model, which is the thing being measured.
+
+fixture: rize
+profile: morning_runner
+
+scenarios:
+  - id: tr-best-time-plain
+    question: "Bu hafta koşu için en iyi zaman ne zaman?"
+    language: tr
+    expect:
+      tools: [get_activity_windows]
+      from_model: true
+
+  - id: tr-tomorrow-morning
+    question: "Yarın sabah koşabilir miyim?"
+    language: tr
+    expect:
+      from_model: true
+
+  - id: tr-indirect-picnic
+    # The phrasing that produced no tool call at all before the system prompt was
+    # rewritten to say the model has no data of its own (docs/05).
+    question: "Hafta sonu piknik yapmayı düşünüyoruz, ne dersin?"
+    language: tr
+    expect:
+      from_model: true
+
+  - id: tr-compare-days
+    question: "Cumartesi mi pazar mı daha iyi?"
+    language: tr
+    expect:
+      from_model: true
+
+  - id: en-best-time-plain
+    question: "When is the best time to run this week?"
+    language: en
+    expect:
+      tools: [get_activity_windows]
+      from_model: true
+
+  - id: en-tomorrow
+    question: "Can I run tomorrow morning?"
+    language: en
+    expect:
+      from_model: true
+
+  - id: tr-vague
+    # No specific day, no specific activity — the model has to choose a tool anyway.
+    question: "Bu hafta hava nasıl olacak?"
+    language: tr
+    expect:
+      from_model: true

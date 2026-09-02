@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from datetime import date as date_type
 
-from app.agent.tools import Facts
+from app.agent.tools import TOOL_NAMES, Facts
 from app.schemas.agent_answer import AgentAnswer
 from app.schemas.plan_response import Window
 
@@ -37,6 +37,20 @@ CLOCK = re.compile(r"\b([01]?\d|2[0-3]):[0-5]\d\b")
 # citing the day correctly: "2026-08-27" yields 2026 as a figure, which appears in no
 # forecast, so a right answer failed the check that exists to catch wrong ones.
 ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+# The same trap in the form people actually write. "27 Ağustos Perşembe" put 27 forward
+# as a measurement, and the answer was rejected for citing the date correctly — the
+# identical defect ISO_DATE was added for, wearing the other calendar's clothes. Found
+# by the evaluation suite, which is what a suite is for.
+MONTHS = (
+    "ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul"
+    "|ekim|kasım|kasim|aralık|aralik"
+    "|january|february|march|april|may|june|july|august|september|october|november"
+    "|december"
+)
+LONG_DATE = re.compile(
+    rf"\b(?:\d{{1,2}}\s+(?:{MONTHS})|(?:{MONTHS})\s+\d{{1,2}})\b", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +88,7 @@ def _claims(text: str) -> list[tuple[float, str]]:
     Clock times are stripped first: `07:00` is two numbers to a regex and one span of
     time to a reader, and the schema already bounds the hours it carries.
     """
-    without_clock = CLOCK.sub(" ", ISO_DATE.sub(" ", text))
+    without_clock = CLOCK.sub(" ", LONG_DATE.sub(" ", ISO_DATE.sub(" ", text)))
     found: list[tuple[float, str]] = []
 
     for match in NUMBER.finditer(without_clock):
@@ -210,6 +224,29 @@ def weekdays_grounded(response: AgentAnswer, dates: set[str]) -> Verdict:
     return Verdict(ok=True)
 
 
+# Names for the machinery behind the answer. None of them belong in a sentence written
+# for a person, and they are as much a defect as an invented number — an identifier is
+# just as wrong and just as deterministic to catch.
+MACHINERY: frozenset[str] = TOOL_NAMES | frozenset(
+    {"tool result", "tool_call", "json", "schema", "araç sonuc", "arac sonuc"}
+)
+
+
+def free_of_machinery(response: AgentAnswer) -> Verdict:
+    """Whether the answer leaked something internal into user-facing prose.
+
+    The model appended `get_activity_windows` to the end of a sentence it wrote for a
+    person. The provenance line was innocent — it correctly said "1 araç" — and every
+    other gate passed, because an identifier is neither a figure nor a condition nor a
+    day. It is still something no reader should ever see.
+    """
+    text = f"{response.reason} {' '.join(response.warnings)}".lower()
+    for token in MACHINERY:
+        if token in text:
+            return Verdict(ok=False, reason=f"leaked an internal name into the answer: {token}")
+    return Verdict(ok=True)
+
+
 def in_scope(response: AgentAnswer) -> Verdict:
     """Whether the answer is still about the weather.
 
@@ -259,6 +296,11 @@ def repair_prompt(verdict: Verdict) -> str:
         return (
             f"Your previous answer used figures that are not in the data: {listed}. "
             "Use only numbers that appear in the tool results, and do not estimate."
+        )
+    if "internal name" in verdict.reason:
+        return (
+            f"Your previous answer was rejected: {verdict.reason}. Write for a person — "
+            "never name a tool, a field, or a format in the answer itself."
         )
     return f"Your previous answer was rejected: {verdict.reason}. Answer again."
 
