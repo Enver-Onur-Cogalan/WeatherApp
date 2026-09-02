@@ -157,11 +157,27 @@ For anything the main screen does not answer. Deliberately not the front door �
   separate fields from the schema, rendered as components.
 - **Provenance is always shown** — how many tools ran, how long it took, and that it
   happened on the device. A local-only assistant should say so.
+- **An engine answer is labelled.** When the model was unreachable, asked for nothing, or
+  produced something that failed validation, the card says so in a line beneath it. The
+  answer is still correct; presenting it as the model's would not be.
 - **History is kept for the session and the last twenty exchanges**, stored locally and
   never synced. Enough to scroll back to yesterday's answer; not enough to become a chat
   app with a retention policy.
 - **Assistant unreachable**: the input is disabled with the reason and a link to
   Sen → Asistan. The rest of the app is untouched.
+
+### Built, and what is not
+
+The screen renders against recorded `/ask` responses, with their real latencies replayed
+rather than removed — an assistant that answers in twenty seconds is a different product
+to design for than one that answers instantly, and the waiting state is most of this
+screen's job.
+
+Three things above are still only written down. **History does not persist** across
+launches; it lives in component state, so the twenty-exchange cap has nothing to cap yet.
+**The unreachable state is not built** — the fixture always answers, so there is no path
+that disables the input. And **streaming is not implemented**: `/ask` returns whole
+answers, and the token-by-token arrival docs/10 describes needs SSE on both ends.
 
 ## Sen
 
