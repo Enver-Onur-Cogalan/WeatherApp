@@ -47,7 +47,7 @@ unstyled — likely a window background that was never set, beneath React's view
 
 ## Polish
 
-### P1 — A loading state that belongs to this app
+### P1 — A loading state that belongs to this app — **done 2026-09-03**
 **Where:** Sor, while the assistant is thinking.
 
 Currently a system spinner and "Cihazda düşünüyor…". The wait is fifteen to forty-seven
@@ -56,6 +56,19 @@ seconds, so it is a large part of the screen's life and deserves better than a d
 There is an obvious source: the app already draws weather in Skia. Something drawn from
 the same vocabulary would make the wait feel like part of the product rather than a stall
 in it.
+
+**Built as the instrument itself.** A Campbell–Stokes recorder burns its trace into a
+printed card as the drum turns — the card is ruled before anything is written on it, and
+the scorch is laid by a moving point of focused light. That is precisely the state being
+shown: running, with nothing to report yet. One SkSL pass draws the ruling and the burn
+together, the head wraps so the loop has no restart, and reduced motion holds a still
+frame rather than stopping dead — the card stays half-burnt, which still reads as work in
+progress.
+
+The wait now also shows its elapsed seconds, after five. The animation is deliberately
+indeterminate: the agent's two phases are not streamed to the client, so a progress bar
+would be fiction. docs/08 measured the median at 27 seconds, which is what made the
+default spinner wrong — that long, it reads as a hang.
 
 ### P2 — The answer card appears abruptly
 **Where:** Sor.
@@ -153,5 +166,10 @@ knows about weather?** Everything so far answers the first. D2 is the second.
 ## Still open
 
 - Nothing here is scheduled. The order is a separate decision from the list.
-- B1 is done. It did not wait for the pass, and the eval suite found its root cause
-  rather than just its symptom.
+- B1 and P1 are done. B1 did not wait for the pass, and the eval suite found its root
+  cause rather than just its symptom.
+- P1 turned up a latent defect of its own: a shader that fails to compile returns `null`,
+  and `<Shader>` accepts null silently, so a typo draws nothing and reports nothing. All
+  four shaders now go through `compileShader()`, which throws, and CI compiles them
+  through CanvasKit on a Linux runner — SkSL is invisible to TypeScript, ESLint and the
+  bundler alike.

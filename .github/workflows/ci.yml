@@ -56,6 +56,13 @@ jobs:
       - name: Lint
         run: npm run lint --workspace apps/mobile
 
+      # SkSL lives inside template literals, where TypeScript, ESLint and the bundler
+      # cannot see it. CanvasKit is the same Skia, so the shaders compile on a plain
+      # Linux runner and a broken one fails here rather than silently drawing nothing
+      # on someone's phone.
+      - name: Shaders compile
+        run: npm run check-shaders --workspace apps/mobile
+
   schema:
     name: Schema — generated files are current
     runs-on: ubuntu-latest

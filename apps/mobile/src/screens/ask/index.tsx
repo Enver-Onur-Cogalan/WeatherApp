@@ -15,7 +15,6 @@
 
 import { useRef, useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -34,6 +33,7 @@ import {
   VERDICT_LABELS,
   type Exchange,
 } from "@/lib/ask";
+import { Thinking } from "@/components/thinking";
 import { formatWindowDay, formatWindowSpan } from "@/lib/plan";
 import { colors, radius, size, space, type } from "@/theme";
 
@@ -93,7 +93,7 @@ export function AskScreen() {
           {pending !== null ? (
             <View style={styles.turn}>
               <Question text={pending} />
-              <Thinking />
+              <Thinking label="Cihazda düşünüyor" />
             </View>
           ) : null}
         </ScrollView>
@@ -135,15 +135,6 @@ function Question({ text }: { text: string }) {
   return (
     <View style={styles.questionRow}>
       <Text style={styles.question}>{text}</Text>
-    </View>
-  );
-}
-
-function Thinking() {
-  return (
-    <View style={[styles.card, styles.thinking]}>
-      <ActivityIndicator color={colors.burnHi} size="small" />
-      <Text style={styles.thinkingText}>Cihazda düşünüyor…</Text>
     </View>
   );
 }
@@ -297,9 +288,6 @@ const styles = StyleSheet.create({
     borderTopColor: colors.ruleSoft,
   },
   warning: { ...type.body, fontSize: 12, lineHeight: 17, color: colors.ember },
-
-  thinking: { flexDirection: "row", alignItems: "center", gap: space.md },
-  thinkingText: { ...type.body, fontSize: size.caption, color: colors.inkDim },
 
   provenance: { ...type.label, fontSize: 9, color: colors.inkDim, marginTop: space.sm },
   fellBack: { ...type.body, fontSize: 11, color: colors.inkDim, marginTop: space.xs },

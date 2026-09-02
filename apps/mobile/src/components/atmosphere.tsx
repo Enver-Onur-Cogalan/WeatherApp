@@ -21,7 +21,6 @@ import {
   LinearGradient,
   Rect,
   Shader,
-  Skia,
   useClock,
   vec,
 } from "@shopify/react-native-skia";
@@ -29,6 +28,7 @@ import { useMemo, useState } from "react";
 import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useDerivedValue } from "react-native-reanimated";
 
+import { compileShader } from "@/lib/shader";
 import { conditionFor, type Condition } from "@/lib/weather-code";
 import { colors } from "@/theme";
 
@@ -38,7 +38,9 @@ import { colors } from "@/theme";
  * distance field to the falling body. `u_mode` switches that body between a streak, a
  * swaying disc, a hard pellet and a drifting sheet.
  */
-const WEATHER = Skia.RuntimeEffect.Make(`
+const WEATHER = compileShader(
+  "weather",
+  `
 uniform float2 u_resolution;
 uniform float  u_time;
 uniform float  u_intensity;  // 0..1
@@ -116,7 +118,9 @@ half4 main(float2 xy) {
  * is exactly what the first build shipped, and why the layer looked like nothing had
  * been added. Cloud cover puts them out.
  */
-const STARS = Skia.RuntimeEffect.Make(`
+const STARS = compileShader(
+  "stars",
+  `
 uniform float2 u_resolution;
 uniform float  u_time;
 uniform float  u_amount;   // 0..1, night times clear sky
@@ -166,7 +170,9 @@ half4 main(float2 xy) {
  * a weaker one about a tenth of a second later, which is what a real strike does and
  * what the eye is actually looking for.
  */
-const LIGHTNING = Skia.RuntimeEffect.Make(`
+const LIGHTNING = compileShader(
+  "lightning",
+  `
 uniform float2 u_resolution;
 uniform float  u_time;
 uniform float  u_active;   // 1 while the hour on screen is a thunderstorm

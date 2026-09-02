@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "canvaskit-wasm": "^0.41.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
@@ -46,7 +47,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check-shaders": "node scripts/check-shaders.mjs"
   },
   "private": true
 }
