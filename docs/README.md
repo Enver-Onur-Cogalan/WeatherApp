@@ -34,6 +34,7 @@ An ADR answers *"why is it like that and not otherwise?"*.
 | 10 | [Design Language](./10-design-language.md) | The instrument direction: palette, type, the trace, thirteen weather states |
 | 11 | [Screen Flows](./11-screen-flows.md) | Navigation graph, every screen, and how the app is entered from outside |
 | 12 | [Data Model](./12-data-model.md) | Entities, the shared contract, sync semantics, migrations |
+| 13 | [Polish Backlog](./13-polish-backlog.md) | What using the app on a device turned up, unscheduled |
 | — | [Decision Records](./adr/README.md) | The full index of ADRs |
 
 ## Documents planned but not yet written
