@@ -1,5 +1,6 @@
 // Generated from packages/schema/schemas. Do not edit — run `npm run schema`.
 export { ActivityProfile } from "./activity-profile";
+export { AgentAnswer } from "./agent-answer";
 export { ForecastHour } from "./forecast-hour";
 export { PlanRequest } from "./plan-request";
 export { PlanResponse } from "./plan-response";

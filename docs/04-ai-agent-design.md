@@ -150,6 +150,35 @@ Gemma 4 supports a configurable thinking mode. We use it selectively:
 Latency is a first-class concern with a local model, and thinking is expensive. Turning
 it on everywhere would be the easy choice and the wrong one.
 
+## What building it changed (2026-08-30)
+
+Five things the design did not anticipate, each found by running the real model rather
+than by reasoning about it.
+
+**The model does not read `role: "tool"`.** Handing results back under the documented
+role, Gemma 4 answered "no specific information was provided" — the request succeeds and
+the model behaves as though it were given nothing. Split across two user messages it read
+the data but answered a Turkish question in English. Folded into a single user message
+with the question it read the data and kept the language. Three shapes, one that works,
+and the two failures are silent.
+
+**The model does not choose the window either.** ADR-0007 removed arithmetic from it; the
+first build still let it emit `best_window`, and it answered `null` while the engine had
+ranked seven. The window is attached from the engine now, and the model is constrained to
+a narrower schema — judgement and prose, nothing computable.
+
+**Groundedness has to be unit-aware.** A flat set of retrieved numbers accepted "15°C" on
+a day whose temperatures were 22–26, because 15 was in the set as an *hour*. Facts are
+bucketed by unit and a figure is checked against the unit it was stated in.
+
+**Not every invented claim contains a digit.** The model warned of thunderstorms on a
+forecast with none, and numeric grounding passed it without a word — the sentence held no
+figures. Named conditions are now checked against the WMO codes actually present.
+
+**A verdict can contradict the data it was given.** The model answered "there is not
+enough information" beside seven ranked windows, and marked `bad` next to one the engine
+scored 95. The judgement stays the model's; contradicting the numbers does not.
+
 ## What we are uncertain about
 
 Written down honestly, to be revisited once the evaluation suite produces numbers:

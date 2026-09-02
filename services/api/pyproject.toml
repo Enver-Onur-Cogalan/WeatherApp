@@ -35,6 +35,11 @@ extend-exclude = ["app/schemas"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+# RUF001-003 flag non-ASCII characters that resemble ASCII ones — a homoglyph check.
+# This app's interface is Turkish and English as equals (CLAUDE.md), and Turkish needs
+# ı, ş, ğ, ç, ö, ü in ordinary user-facing copy. Here the rule fires on correct text,
+# so it would train us to write the language wrong.
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.11"

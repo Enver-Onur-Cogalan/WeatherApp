@@ -119,6 +119,20 @@ Same prompt, same model, one parameter changed:
 the number behind that argument: leaving it on by default would make every request feel
 broken, for no measured gain on single-step tasks.
 
+### 3a. The 75% was a property of the prompt, not the model
+
+Measured later, while building the agent (2026-08-30). Same model, same tools, same four
+questions — only the system prompt changed:
+
+| System prompt | Called a tool |
+|---|---|
+| "Use the tools to gather facts before answering." | **1 / 4** |
+| "You have no weather data of your own. You MUST call a tool before answering." | **4 / 4** |
+
+The benchmark's neutral prompt was measuring how willing the model was to volunteer, not
+whether it could. Most of what looked like weak tool calling was the prompt declining to
+insist. The benchmark figure stands as a number about *that* prompt; it is not a ceiling.
+
 ### 3. Tool calling works, and fails in the safe direction
 
 75 % is unimpressive in isolation, but the *shape* of the failures matters more than the
