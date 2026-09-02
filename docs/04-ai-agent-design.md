@@ -175,6 +175,14 @@ bucketed by unit and a figure is checked against the unit it was stated in.
 forecast with none, and numeric grounding passed it without a word — the sentence held no
 figures. Named conditions are now checked against the WMO codes actually present.
 
+**Day names are arithmetic too.** The model wrote "Cumartesi (2026-09-02)" for a
+Wednesday. No figure was wrong and no condition was named, so both existing gates passed
+it — a day name is a claim about the calendar, and nothing was checking the calendar.
+ADR-0007 reaches further than it looks: deriving a weekday from a date is a calculation.
+The tools hand the day name over now, in English, because picking the right word in the
+answer's language is something the model does reliably and deriving Saturday from a date
+is not. A check backs it up.
+
 **A verdict can contradict the data it was given.** The model answered "there is not
 enough information" beside seven ranked windows, and marked `bad` next to one the engine
 scored 95. The judgement stays the model's; contradicting the numbers does not.

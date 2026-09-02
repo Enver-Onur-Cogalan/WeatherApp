@@ -19,7 +19,14 @@ import pytest
 from app.agent.orchestrator import PlanningAgent
 from app.agent.provider import Completion, Message, ModelUnavailableError, ToolCall
 from app.agent.tools import TOOLS, ToolRunner
-from app.agent.validation import coherent, conditions_grounded, grounded, in_scope, parse
+from app.agent.validation import (
+    coherent,
+    conditions_grounded,
+    grounded,
+    in_scope,
+    parse,
+    weekdays_grounded,
+)
 from app.planning.models import Activity, ActivityProfile, ForecastHour
 from app.schemas.agent_answer import AgentAnswer as ModelAnswer
 from app.schemas.plan_response import Window as ResponseWindow
@@ -239,6 +246,52 @@ class TestConditionGrounding:
         response = parse(answer_json("Hava koşu için gayet keyifli görünüyor."))
         assert response is not None
         assert conditions_grounded(response, {0}).ok
+
+
+class TestWeekdayGrounding:
+    """The third kind of invented claim, after figures and conditions.
+
+    The model wrote "Cumartesi (2026-09-02)" for a Wednesday. No digit was wrong, no
+    condition was named, and both existing gates passed it — a day name is a claim about
+    the calendar, and nothing was checking the calendar.
+    """
+
+    def test_a_day_the_forecast_does_not_cover_is_rejected(self) -> None:
+        response = parse(answer_json("Cumartesi günü koşabilirsin."))
+        assert response is not None
+        # 2026-08-26 and 27 are a Wednesday and a Thursday.
+        assert not weekdays_grounded(response, {"2026-08-26", "2026-08-27"}).ok
+
+    def test_a_day_the_forecast_covers_passes(self) -> None:
+        response = parse(answer_json("Çarşamba günü koşabilirsin."))
+        assert response is not None
+        assert weekdays_grounded(response, {"2026-08-26", "2026-08-27"}).ok
+
+    def test_english_day_names_are_checked_too(self) -> None:
+        response = parse(answer_json("Saturday looks best."))
+        assert response is not None
+        assert not weekdays_grounded(response, {"2026-08-26"}).ok
+
+    def test_pazar_inside_pazartesi_does_not_match(self) -> None:
+        """ "Pazar" is Sunday and also the Turkish for market, and it sits inside
+        "Pazartesi" — a substring match would reject a correct Monday."""
+        response = parse(answer_json("Pazartesi günü uygun."))
+        assert response is not None
+        # 2026-08-31 is a Monday; no Sunday in the set.
+        assert weekdays_grounded(response, {"2026-08-31"}).ok
+
+
+class TestToolsSupplyTheWeekday:
+    def test_windows_carry_the_day_name(self) -> None:
+        """Derived by the engine, so the model never computes a calendar mapping."""
+        result = ToolRunner(hours(), MORNING_RUNNER).run("get_activity_windows", {})
+        assert all("weekday" in window for window in result.payload["windows"])
+
+    def test_the_day_name_is_correct(self) -> None:
+        from app.agent.tools import weekday_of
+
+        assert weekday_of("2026-09-02") == "Wednesday"
+        assert weekday_of("2026-08-29") == "Saturday"
 
 
 class TestCoherence:

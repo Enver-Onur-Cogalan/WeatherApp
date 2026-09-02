@@ -14,6 +14,8 @@ import httpx
 import redis.asyncio as aioredis
 from fastapi import Depends
 
+from app.agent.orchestrator import PlanningAgent
+from app.agent.provider import OllamaProvider
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.weather.cache import ForecastCache, RedisLike
@@ -61,6 +63,26 @@ async def get_weather_service() -> AsyncIterator[WeatherService]:
 
 
 WeatherDep = Annotated[WeatherService, Depends(get_weather_service)]
+
+
+async def get_agent() -> AsyncIterator[PlanningAgent]:
+    """The planning agent, sharing the process-wide HTTP client.
+
+    Built per request but holding no state: the provider is a thin wrapper over one
+    connection pool, and the agent's own state lives entirely inside a single `answer`.
+    """
+    settings = get_settings()
+    yield PlanningAgent(
+        provider=OllamaProvider(
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+            timeout_seconds=settings.ollama_timeout_seconds,
+            client=_http_client,
+        )
+    )
+
+
+AgentDep = Annotated[PlanningAgent, Depends(get_agent)]
 
 
 def _typecheck_redis(client: aioredis.Redis) -> RedisLike:

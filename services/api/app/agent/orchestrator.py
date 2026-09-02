@@ -40,8 +40,10 @@ from app.agent.validation import (
     in_scope,
     parse,
     repair_prompt,
+    weekdays_grounded,
 )
 from app.core.logging import get_logger
+from app.planning.daily import local_date
 from app.planning.models import ActivityProfile, ForecastHour
 from app.planning.scoring import plan
 from app.schemas.agent_answer import AgentAnswer as ModelAnswer
@@ -153,6 +155,7 @@ class PlanningAgent:
             else None
         )
         codes = {hour.weather_code for hour in hours}
+        dates = {local_date(hour) for hour in hours}
 
         if not gathered:
             # The model asked for nothing, so it has nothing to add over the engine.
@@ -163,7 +166,7 @@ class PlanningAgent:
 
         try:
             answer = await self._compose(
-                question, gathered, facts, codes, window, elapsed, called
+                question, gathered, facts, codes, dates, window, elapsed, called
             )
         except ModelUnavailableError as exc:
             logger.warning("agent.model_unavailable", error=str(exc))
@@ -228,6 +231,7 @@ class PlanningAgent:
         gathered: list[tuple[str, str]],
         facts: Facts,
         codes: set[int],
+        dates: set[str],
         window: ResponseWindow | None,
         elapsed: Any,
         called: list[str],
@@ -260,6 +264,7 @@ class PlanningAgent:
                 coherent(response, window),
                 grounded(response, facts),
                 conditions_grounded(response, codes),
+                weekdays_grounded(response, dates),
             )
             for verdict in checks:
                 if not verdict.ok:

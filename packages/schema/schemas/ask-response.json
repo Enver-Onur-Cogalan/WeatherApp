@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weatherapp.local/schemas/ask-response.json",
+  "title": "AskResponse",
+  "description": "The assistant's answer, and how it was produced. The provenance is not diagnostics: the interface shows it (docs/11), because an assistant that runs on your own device should say so, and an answer the model did not write should not be presented as though it had.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["answer", "tool_calls", "duration_ms", "from_model", "on_device"],
+  "properties": {
+    "answer": { "$ref": "https://weatherapp.local/schemas/plan-response.json" },
+    "tool_calls": {
+      "type": "array",
+      "description": "Tools the model asked for, in order. Empty when it asked for none.",
+      "items": { "type": "string" }
+    },
+    "duration_ms": { "type": "integer", "minimum": 0 },
+    "from_model": {
+      "type": "boolean",
+      "description": "False when the answer came from the scoring engine instead — because the model was unreachable, asked for nothing, or produced something that failed validation. The answer is still correct; it is just not the model's sentence."
+    },
+    "fallback_reason": {
+      "type": ["string", "null"],
+      "description": "Why the engine answered instead. Null when the model did."
+    },
+    "on_device": {
+      "type": "boolean",
+      "description": "Always true. The model is local by construction (ADR-0004), and the interface states it rather than leaving the user to assume."
+    }
+  }
+}

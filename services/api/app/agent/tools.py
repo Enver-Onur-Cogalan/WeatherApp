@@ -14,11 +14,30 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import date as date_type
 from typing import Any
 
 from app.planning.daily import summarise_days
 from app.planning.models import ActivityProfile, ForecastHour
 from app.planning.scoring import dominant_blocker, plan
+
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def weekday_of(iso_date: str) -> str:
+    """The day name for a date.
+
+    Handed to the model rather than left for it to derive. Asked to work it out, Gemma 4
+    answered "Cumartesi (2026-09-02)" for a Wednesday — ADR-0007's rule reaching past
+    arithmetic into the calendar. Translating "Saturday" is a lexical task it does well;
+    deriving Saturday from a date is one it does not.
+
+    English, because the tool does not know what language the question was in — and
+    picking a word is something the model can be trusted with.
+    """
+    year, month, day = (int(part) for part in iso_date.split("-"))
+    return WEEKDAYS[date_type(year, month, day).weekday()]
+
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -202,6 +221,7 @@ class ToolRunner:
             "windows": [
                 {
                     "day": window.day,
+                    "weekday": weekday_of(window.day),
                     "start_hour": window.start_hour,
                     "end_hour": window.end_hour,
                     "score": round(window.mean_score),
@@ -223,6 +243,7 @@ class ToolRunner:
         sampled = self._day_hours(day)[::3]
         return {
             "date": summary.date,
+            "weekday": weekday_of(summary.date),
             "temp_min": round(summary.temp_min_c),
             "temp_max": round(summary.temp_max_c),
             "weather_code": summary.weather_code,
@@ -244,12 +265,14 @@ class ToolRunner:
         return {
             "a": {
                 "date": a.date,
+                "weekday": weekday_of(a.date),
                 "temp_max": round(a.temp_max_c),
                 "rain_pct": a.precip_prob_max_pct,
                 "windows": len(scored_a),
             },
             "b": {
                 "date": b.date,
+                "weekday": weekday_of(b.date),
                 "temp_max": round(b.temp_max_c),
                 "rain_pct": b.precip_prob_max_pct,
                 "windows": len(scored_b),

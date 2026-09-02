@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import date as date_type
 
 from app.agent.tools import Facts
 from app.schemas.agent_answer import AgentAnswer
@@ -163,6 +164,48 @@ def conditions_grounded(response: AgentAnswer, codes: set[int]) -> Verdict:
             return Verdict(
                 ok=False,
                 reason=f"claims '{word}' but no hour in the forecast carries that condition",
+            )
+    return Verdict(ok=True)
+
+
+# Day names in both of the app's languages, indexed the way `date.weekday()` is.
+WEEKDAY_WORDS: dict[str, int] = {
+    "pazartesi": 0,
+    "monday": 0,
+    "salı": 1,
+    "tuesday": 1,
+    "çarşamba": 2,
+    "wednesday": 2,
+    "perşembe": 3,
+    "thursday": 3,
+    "cuma": 4,
+    "friday": 4,
+    "cumartesi": 5,
+    "saturday": 5,
+    "pazar": 6,
+    "sunday": 6,
+}
+
+
+def weekdays_grounded(response: AgentAnswer, dates: set[str]) -> Verdict:
+    """Whether a named day is a day the forecast actually covers.
+
+    The third kind of invented claim, after figures and conditions. The model wrote
+    "Cumartesi (2026-09-02)" for a Wednesday: no digit was wrong, no condition was named,
+    and both existing gates passed it. A day name is a claim about the calendar, and the
+    calendar is checkable.
+
+    "pazar" is deliberately matched as a whole word — it is also the Turkish for market,
+    and inside "pazartesi" it would match the wrong day.
+    """
+    covered = {date_type(*(int(part) for part in day.split("-"))).weekday() for day in dates}
+    text = f"{response.reason} {' '.join(response.warnings)}".lower()
+
+    for word, index in WEEKDAY_WORDS.items():
+        if re.search(rf"(?<![\w]){re.escape(word)}(?![\w])", text) and index not in covered:
+            return Verdict(
+                ok=False,
+                reason=f"names '{word}' but the forecast covers no such day",
             )
     return Verdict(ok=True)
 

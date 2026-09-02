@@ -19,6 +19,7 @@ from app.planning.daily import current_index, summarise_days
 from app.planning.models import Activity, ActivityProfile
 from app.planning.scoring import plan as run_plan
 from app.planning.scoring import score_hours
+from app.schemas.activity_profile import ActivityProfile as WireProfile
 from app.schemas.plan_request import PlanRequest
 from app.schemas.plan_result import Blocker, DaySummary, PlanResult, ScoredHour, Window
 from app.weather.client import ForecastUnavailableError
@@ -30,7 +31,7 @@ router = APIRouter(tags=["planning"])
 DEFAULT_DAYS = 7
 
 
-def _to_domain(request: PlanRequest) -> ActivityProfile:
+def to_domain_profile(profile: WireProfile) -> ActivityProfile:
     """The wire profile into the engine's own type.
 
     Two representations on purpose: the wire shape is generated from JSON Schema and is
@@ -38,7 +39,6 @@ def _to_domain(request: PlanRequest) -> ActivityProfile:
     and free of Pydantic. Converting here keeps `planning` importable with nothing else
     installed.
     """
-    profile = request.profile
     start, end = profile.preferred_hours
     return ActivityProfile(
         activity=Activity(profile.activity),
@@ -86,7 +86,7 @@ async def create_plan(request: PlanRequest, weather: WeatherDep) -> PlanResult:
             detail="Forecast unavailable and nothing cached for this location",
         ) from exc
 
-    profile = _to_domain(request)
+    profile = to_domain_profile(request.profile)
     hours = list(forecast.hours)
     scored = score_hours(hours, profile)
     windows, blocker = run_plan(hours, profile)

@@ -41,6 +41,7 @@ An ADR answers *"why is it like that and not otherwise?"*.
 These areas have not been decided yet. They will be added as the design settles.
 
 - **Observability** — metrics, tracing, and what we expose publicly
+- **API reference** — the endpoints and their contracts, once they stop moving
 
 ## Conventions used in these documents
 
