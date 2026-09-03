@@ -84,6 +84,41 @@ test was quietly more forgiving than production. The override now mirrors the re
 dependency, and it fails without the fix. The defect was found by running the sequence
 against the live service with curl, not by the suite that was meant to cover it.
 
+### The client, and the rule rotation created
+
+Mobile side, 2026-09-03. The refresh token lives in `expo-secure-store` — Keychain on
+iOS, Keystore on Android — and the access token lives in a module variable, never on
+disk: fifteen minutes of validity makes persistence a liability rather than a
+convenience.
+
+**Refresh is single-flight, and that is a correctness requirement rather than an
+optimisation.** Rotation means the server revokes an entire token family when a refresh
+token is presented twice, because that is what theft looks like. Two requests expiring
+together and each refreshing on its own is indistinguishable from a stolen token. This
+was measured rather than reasoned about — two concurrent refreshes with the same token
+against the running service:
+
+```
+request B: 200   (rotated)
+request A: 401   (replay detected)
+winning token afterwards: 401   (family revoked)
+```
+
+So without the single-flight guard, any two requests whose access token expired at the
+same moment would sign the user out of everything. A generation counter goes with it: a
+refresh still in the air when someone signs out must not write its tokens back into a
+session that has ended, and must not clear a slot a newer cycle has taken.
+
+A stored refresh token is not treated as proof of a session. At launch it is spent on a
+real refresh before the app claims to be signed in; failing that, the token is cleared
+and the app is a guest, which is a working state rather than an error. Signing out clears
+the local session whatever the server says — a sign-out that fails because the network is
+down is the one outcome it must never produce.
+
+The account endpoints do not go through the client's own retrying HTTP layer. That layer
+refreshes and retries on a 401, which would mean a failed login triggering a refresh and
+a failed refresh triggering another one.
+
 ## Threat model, stated honestly
 
 This is a self-hosted application handling low-sensitivity data: locations and activity

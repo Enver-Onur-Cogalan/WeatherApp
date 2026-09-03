@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { TabBar } from "@/components/tab-bar";
+import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queries";
 import { colors } from "@/theme";
 
@@ -41,6 +42,15 @@ const instrumentTheme = {
 };
 
 export default function RootLayout() {
+  const restore = useAuth((state) => state.restore);
+
+  // Once, at launch. A stored refresh token is spent on a real refresh before the app
+  // claims to be signed in — see `lib/auth.ts`. Failing that we are a guest, which is a
+  // working state rather than an error, so nothing here waits on it.
+  useEffect(() => {
+    void restore();
+  }, [restore]);
+
   const [ready, error] = useFonts({
     Archivo_400Regular,
     Archivo_600SemiBold,

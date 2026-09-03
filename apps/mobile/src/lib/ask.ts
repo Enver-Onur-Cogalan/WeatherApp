@@ -87,6 +87,12 @@ const MESSAGES: Record<ErrorKind, { title: string; detail: string }> = {
     title: "İstek kabul edilmedi",
     detail: "Uygulama sunucunun beklemediği bir şey gönderdi. Bu bir uygulama hatası.",
   },
+  unauthenticated: {
+    title: "Oturum açman gerekiyor",
+    detail:
+      "Bu kısım hesabına bağlı. Sen sekmesinden giriş yap — tahminler ve pencereler " +
+      "hesapsız da çalışmaya devam ediyor.",
+  },
   contract: {
     title: "Sunucunun cevabı beklenen biçimde değil",
     detail:

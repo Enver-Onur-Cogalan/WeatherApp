@@ -180,6 +180,10 @@ offering it on a schema mismatch would be a lie.
 
 ## Still open
 
+- **Signing in buys nothing yet.** The account exists and the endpoints for saved
+  profiles and places are built and tested, but no screen reads them — İz still sends
+  constants. That is the next piece of work, and until it lands an account is a name on
+  a settings screen.
 - **One hard-coded location.** `Konumlar` is listed under Sen in docs/11 and unbuilt, so
   the app asks about İstanbul and now at least *says* so on both screens — the smaller
   half of F3. The larger half needs somewhere to store a place.

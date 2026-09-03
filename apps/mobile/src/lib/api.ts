@@ -18,6 +18,7 @@
 
 import { z } from "zod";
 
+import { getAccessToken, refreshAccessToken } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/config";
 
 export type ErrorKind =
@@ -34,7 +35,9 @@ export type ErrorKind =
   /** 4xx. We sent something the server would not accept; a bug on this side. */
   | "request"
   /** The response parsed as JSON but not as the schema. The contract has drifted. */
-  | "contract";
+  | "contract"
+  /** The endpoint needs an account and this device does not have a usable session. */
+  | "unauthenticated";
 
 export class ApiError extends Error {
   readonly kind: ErrorKind;
@@ -59,7 +62,23 @@ type PostOptions<T> = {
   signal?: AbortSignal;
 };
 
-export async function post<T>({
+export async function post<T>(options: PostOptions<T>): Promise<T> {
+  try {
+    return await attempt(options);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.kind !== "unauthenticated") throw error;
+
+    // One refresh, one retry. `refreshAccessToken` is single-flight, so several requests
+    // expiring together share a single rotation — presenting the same refresh token twice
+    // is what the server treats as theft, and it would revoke the whole family.
+    const refreshed = await refreshAccessToken();
+    if (refreshed === null) throw error;
+
+    return await attempt(options);
+  }
+}
+
+async function attempt<T>({
   path,
   body,
   schema,
@@ -82,9 +101,15 @@ export async function post<T>({
 
   let response: Response;
   try {
+    const token = getAccessToken();
     response = await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Sent when we have one, on every request. An open endpoint ignores it; an
+        // account-only one needs it; and neither has to be told which it is.
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(body),
       signal: deadline.signal,
     });
@@ -103,6 +128,9 @@ export async function post<T>({
 
   if (!response.ok) {
     const detail = await readDetail(response);
+    if (response.status === 401) {
+      throw new ApiError("unauthenticated", detail, 401);
+    }
     if (response.status === 503) {
       throw new ApiError("forecast_unavailable", detail, 503);
     }
