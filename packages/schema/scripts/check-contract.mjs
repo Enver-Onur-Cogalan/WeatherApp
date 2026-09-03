@@ -43,6 +43,7 @@ fs.rmSync(build, { recursive: true, force: true });
 const CASES = [
   { fixture: "plan-result.json", schema: "plan-result.js", export: "PlanResult" },
   { fixture: "ask-response.json", schema: "ask-response.js", export: "AskResponse" },
+  { fixture: "saved-profile.json", schema: "saved-profile.js", export: "SavedProfile" },
 ];
 
 try {

@@ -16,6 +16,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/lib/auth";
+import { Profiles } from "@/screens/you/profiles";
 import { colors, radius, size, space, type } from "@/theme";
 
 export function YouScreen() {
@@ -35,13 +36,16 @@ export function YouScreen() {
             <ActivityIndicator color={colors.burnHi} size="small" />
           </View>
         ) : status === "signed-in" && account !== null ? (
-          <SignedIn email={account.email} />
+          <>
+            <SignedIn email={account.email} />
+            <Profiles />
+          </>
         ) : (
           <Guest />
         )}
 
         <Text style={styles.pending}>
-          Profiller, konumlar, bildirimler ve asistan durumu buraya gelecek.
+          Konumlar, bildirimler ve asistan durumu buraya gelecek.
         </Text>
       </ScrollView>
     </SafeAreaView>

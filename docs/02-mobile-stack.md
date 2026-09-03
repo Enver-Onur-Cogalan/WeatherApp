@@ -178,12 +178,38 @@ drifted are five different sentences, and docs/10 requires each to explain what 
 and offer a fix. The retry button appears only when pressing it could plausibly work;
 offering it on a schema mismatch would be a lie.
 
+## Profiles, and what an account changes
+
+Wired up 2026-09-03. İz's chips are saved profiles when there are any, and the built-in
+three otherwise — including for a signed-in account that has not saved anything.
+
+**İz always has something to draw.** A signed-in account with no profiles falls back to
+the same defaults a guest uses rather than showing an empty state that must be cleared
+before the app works. Saving a profile is additive, never a prerequisite. Nothing is
+written to an account without being asked for either: seeding the three defaults on first
+sign-in would be convenient and would also be data the person never created, in an
+account whose whole premise is that it stores what they ask it to. Sen offers a button
+instead.
+
+Ids are UUIDv7, generated on the device (ADR-0015). `expo-crypto` only offers v4, so v7
+is written out — the timestamp in the high bits is the point: ids sort by creation, an
+index on the primary key stays dense, and a list needs no second column to order by. The
+implementation is checked against RFC 9562 rather than trusted, including the trap that
+`Date.now()` exceeds 32 bits and `>>>` would truncate it, giving every id the same prefix.
+
+The plan query is keyed on the *constraints* rather than on a profile's name or id: two
+profiles with the same limits score identically, and renaming one should not refetch.
+
+Limits are edited with steppers, not sliders. These are integers with meaning — 15 km/h
+is a decision, and a slider that lands on 14 because of where a thumb stopped makes a
+person fight the control instead of expressing a limit.
+
 ## Still open
 
-- **Signing in buys nothing yet.** The account exists and the endpoints for saved
-  profiles and places are built and tested, but no screen reads them — İz still sends
-  constants. That is the next piece of work, and until it lands an account is a name on
-  a settings screen.
+- **Guest profiles are not stored at all.** A guest gets the three built-in defaults and
+  cannot edit them, because nothing persists on the device yet. That also means the
+  guest-to-account migration ADR-0009 calls the fiddliest part of the feature has nothing
+  to migrate, and is not built.
 - **One hard-coded location.** `Konumlar` is listed under Sen in docs/11 and unbuilt, so
   the app asks about İstanbul and now at least *says* so on both screens — the smaller
   half of F3. The larger half needs somewhere to store a place.

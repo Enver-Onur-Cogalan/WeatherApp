@@ -1,0 +1,18 @@
+{
+  "id": "01a06519-0d8b-78c2-8498-d191871e2cbe",
+  "name": "Sabah koşusu",
+  "constraints": {
+    "activity": "running",
+    "temp_min": 5,
+    "temp_max": 26,
+    "wind_max_kmh": 15,
+    "precip_max_pct": 20,
+    "uv_max": 6,
+    "preferred_hours": [
+      6,
+      10
+    ]
+  },
+  "created_at": "2026-09-03T02:28:55.900600+00:00",
+  "updated_at": "2026-09-03T02:28:55.892002+00:00"
+}

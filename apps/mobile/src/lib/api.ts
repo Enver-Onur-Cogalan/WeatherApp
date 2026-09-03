@@ -54,15 +54,16 @@ export class ApiError extends Error {
 /** FastAPI's error body. Its `detail` is written for a developer, not for a person. */
 const ProblemDetail = z.object({ detail: z.string() }).partial();
 
-type PostOptions<T> = {
+type RequestOptions<T> = {
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   path: string;
-  body: unknown;
+  body?: unknown;
   schema: z.ZodType<T>;
   timeoutMs: number;
   signal?: AbortSignal;
 };
 
-export async function post<T>(options: PostOptions<T>): Promise<T> {
+export async function request<T>(options: RequestOptions<T>): Promise<T> {
   try {
     return await attempt(options);
   } catch (error) {
@@ -78,13 +79,19 @@ export async function post<T>(options: PostOptions<T>): Promise<T> {
   }
 }
 
+/** The common case, kept as its own name because most calls are one. */
+export function post<T>(options: Omit<RequestOptions<T>, "method">): Promise<T> {
+  return request({ ...options, method: "POST" });
+}
+
 async function attempt<T>({
+  method = "POST",
   path,
   body,
   schema,
   timeoutMs,
   signal,
-}: PostOptions<T>): Promise<T> {
+}: RequestOptions<T>): Promise<T> {
   if (API_BASE_URL === null) {
     throw new ApiError(
       "unconfigured",
@@ -103,14 +110,16 @@ async function attempt<T>({
   try {
     const token = getAccessToken();
     response = await fetch(`${API_BASE_URL}${path}`, {
-      method: "POST",
+      method,
       headers: {
-        "Content-Type": "application/json",
+        // Only when there is one to describe. A `Content-Type` on a bodyless GET is
+        // noise, and some proxies treat it as a malformed request.
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         // Sent when we have one, on every request. An open endpoint ignores it; an
         // account-only one needs it; and neither has to be told which it is.
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: deadline.signal,
     });
   } catch (cause) {
@@ -138,6 +147,12 @@ async function attempt<T>({
       throw new ApiError("server", detail, response.status);
     }
     throw new ApiError("request", detail, response.status);
+  }
+
+  // 204 from a delete, and any other empty success. There is nothing to parse, and
+  // demanding JSON here would turn a correct response into a contract error.
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return schema.parse(undefined);
   }
 
   let payload: unknown;

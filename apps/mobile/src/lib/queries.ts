@@ -26,7 +26,7 @@ import { AskResponse, PlanResult } from "@weatherapp/schema";
 
 import { ApiError, post } from "@/lib/api";
 import { DEFAULT_LOCATION, TIMEOUT_MS } from "@/lib/config";
-import { PROFILES, type ActivityKey } from "@/lib/plan";
+import type { Choice } from "@/lib/profiles";
 
 /** Errors that will not get better by being repeated. */
 const PERMANENT = new Set(["unconfigured", "request", "contract", "forecast_unavailable"]);
@@ -45,9 +45,16 @@ export const queryClient = new QueryClient({
   },
 });
 
-export function usePlan(activity: ActivityKey): UseQueryResult<PlanResult, Error> {
+export function usePlan(choice: Choice): UseQueryResult<PlanResult, Error> {
   return useQuery({
-    queryKey: ["plan", activity, DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude],
+    // Keyed on the limits rather than on the profile's name or id: two profiles with the
+    // same constraints score identically, and editing a name should not refetch.
+    queryKey: [
+      "plan",
+      DEFAULT_LOCATION.latitude,
+      DEFAULT_LOCATION.longitude,
+      choice.constraints,
+    ],
     queryFn: ({ signal }) =>
       post({
         path: "/plan",
@@ -55,7 +62,7 @@ export function usePlan(activity: ActivityKey): UseQueryResult<PlanResult, Error
           latitude: DEFAULT_LOCATION.latitude,
           longitude: DEFAULT_LOCATION.longitude,
           timezone: DEFAULT_LOCATION.timezone,
-          profile: PROFILES[activity],
+          profile: choice.constraints,
         },
         schema: PlanResult,
         timeoutMs: TIMEOUT_MS.plan,
@@ -67,9 +74,7 @@ export function usePlan(activity: ActivityKey): UseQueryResult<PlanResult, Error
   });
 }
 
-export function useAsk(
-  activity: ActivityKey,
-): UseMutationResult<AskResponse, Error, string> {
+export function useAsk(choice: Choice): UseMutationResult<AskResponse, Error, string> {
   return useMutation({
     mutationFn: (question: string) =>
       post({
@@ -78,7 +83,7 @@ export function useAsk(
           latitude: DEFAULT_LOCATION.latitude,
           longitude: DEFAULT_LOCATION.longitude,
           timezone: DEFAULT_LOCATION.timezone,
-          profile: PROFILES[activity],
+          profile: choice.constraints,
           question,
         },
         schema: AskResponse,

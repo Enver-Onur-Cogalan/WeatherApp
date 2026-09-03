@@ -29,8 +29,6 @@ import { Failure, Loading } from "@/components/states";
 import { Trace } from "@/components/trace";
 import { Week } from "@/components/week";
 import {
-  ACTIVITIES,
-  ACTIVITY_LABELS,
   CONSTRAINT_LABELS,
   bestHourIndex,
   currentDayIndex,
@@ -40,19 +38,24 @@ import {
   formatWindowDay,
   formatWindowSpan,
   sliceFor,
-  type ActivityKey,
   type PlanResult,
   type Span,
 } from "@/lib/plan";
 import { DEFAULT_LOCATION } from "@/lib/config";
+import { useChoices, type Choice } from "@/lib/profiles";
 import { usePlan } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
 
 const GUTTER = space.lg;
 
 export function TraceScreen() {
-  const [activity, setActivity] = useState<ActivityKey>("running");
-  const { data: plan, error, isPending, refetch } = usePlan(activity);
+  const { choices } = useChoices();
+  const [chosen, setChosen] = useState<string | null>(null);
+
+  // Falls back to the first rather than holding a stale key: a profile can be deleted on
+  // another device, and a chip pointing at nothing would leave the screen blank.
+  const choice = choices.find((item) => item.key === chosen) ?? choices[0];
+  const { data: plan, error, isPending, refetch } = usePlan(choice);
 
   // Switching activity keeps the previous trace on screen while the new one is scored
   // (`keepPreviousData`), so these two states are only ever the *first* load — which is
@@ -76,9 +79,10 @@ export function TraceScreen() {
   return (
     <Loaded
       plan={plan}
-      activity={activity}
-      onActivity={setActivity}
-      key={/* a new plan is a new slice, and the scrubber should not survive it */ activity}
+      choices={choices}
+      choice={choice}
+      onChoose={setChosen}
+      key={/* a new plan is a new slice, and the scrubber should not survive it */ choice.key}
     />
   );
 }
@@ -101,12 +105,14 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function Loaded({
   plan,
-  activity,
-  onActivity,
+  choices,
+  choice,
+  onChoose,
 }: {
   plan: PlanResult;
-  activity: ActivityKey;
-  onActivity: (key: ActivityKey) => void;
+  choices: Choice[];
+  choice: Choice;
+  onChoose: (key: string) => void;
 }) {
   const { width } = useWindowDimensions();
   const [span, setSpan] = useState<Span>("day");
@@ -164,20 +170,20 @@ function Loaded({
             <Text style={styles.day}>{formatWindowDay(best)}</Text>
             <Text style={styles.span}>{formatWindowSpan(best)}</Text>
             <Text style={styles.why}>
-              {ACTIVITY_LABELS[activity]} için haftanın en iyi penceresi.
+              {choice.label} için haftanın en iyi penceresi.
             </Text>
           </View>
         ) : (
-          <Empty blocker={plan.blocker} activity={activity} />
+          <Empty blocker={plan.blocker} label={choice.label} />
         )}
 
         <View style={styles.chips}>
-          {ACTIVITIES.map((key) => (
+          {choices.map((item) => (
             <Chip
-              key={key}
-              label={ACTIVITY_LABELS[key]}
-              active={key === activity}
-              onPress={() => onActivity(key)}
+              key={item.key}
+              label={item.label}
+              active={item.key === choice.key}
+              onPress={() => onChoose(item.key)}
             />
           ))}
         </View>
@@ -213,7 +219,7 @@ function Loaded({
             {/* Remounting per day and activity resets the scrubber to that slice's best
                 hour, which is what changing either was asking for. */}
             <Trace
-              key={`${activity}-${selectedDay}`}
+              key={`${choice.key}-${selectedDay}`}
               slice={slice}
               width={width}
               initialIndex={startAt}
@@ -226,7 +232,7 @@ function Loaded({
             />
 
             <Text style={styles.legend}>
-              Çizgi ne kadar yüksekse o saat {ACTIVITY_LABELS[activity].toLowerCase()} için
+              Çizgi ne kadar yüksekse o saat {choice.label.toLocaleLowerCase("tr")} için
               o kadar uygun. Kehribar bölümler sınırlarını geçen pencereler.
             </Text>
           </View>
@@ -244,13 +250,7 @@ function Loaded({
   );
 }
 
-function Empty({
-  blocker,
-  activity,
-}: {
-  blocker: PlanResult["blocker"];
-  activity: ActivityKey;
-}) {
+function Empty({ blocker, label }: { blocker: PlanResult["blocker"]; label: string }) {
   return (
     <View style={styles.verdict}>
       <Text style={styles.emptyHead}>Bu hafta hiçbir saat sınırlarını geçmiyor</Text>
@@ -260,7 +260,7 @@ function Empty({
           {blocker.hours} saati eledi.
         </Text>
       ) : (
-        <Text style={styles.why}>{ACTIVITY_LABELS[activity]} profilin için sonuç yok.</Text>
+        <Text style={styles.why}>{label} profilin için sonuç yok.</Text>
       )}
     </View>
   );

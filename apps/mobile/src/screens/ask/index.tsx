@@ -36,6 +36,7 @@ import {
 } from "@/lib/ask";
 import { DEFAULT_LOCATION } from "@/lib/config";
 import { formatWindowDay, formatWindowSpan } from "@/lib/plan";
+import { useChoices } from "@/lib/profiles";
 import { useAsk } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
 
@@ -44,7 +45,10 @@ export function AskScreen() {
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const scroller = useRef<ScrollView>(null);
-  const ask = useAsk("running");
+  // The first profile, which is the one İz opens on. Asking about a different profile
+  // than the trace is showing would make two screens disagree about the same question.
+  const { choices } = useChoices();
+  const ask = useAsk(choices[0]);
 
   const toEnd = () =>
     requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
