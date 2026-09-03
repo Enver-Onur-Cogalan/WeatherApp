@@ -27,6 +27,20 @@ import { API_BASE_URL, TIMEOUT_MS } from "@/lib/config";
 
 const REFRESH_KEY = "weatherapp.refresh_token";
 
+/**
+ * Whether the person has already answered the gate.
+ *
+ * Not a secret, and `expo-secure-store` is for secrets — but it is installed, it survives
+ * a reinstall the same way the refresh token does, and adding a second storage library
+ * for one boolean costs more than the impurity. Written down so the next person does not
+ * mistake it for a considered use of the keystore.
+ *
+ * It has to persist. A gate that reappears on every launch is the wall ADR-0009 exists to
+ * avoid: the first person to open this project will not create an account to look around,
+ * and being asked again every time is worse than being asked once.
+ */
+const GUEST_KEY = "weatherapp.chose_guest";
+
 /** Fifteen minutes of validity, so disk would be a liability rather than a convenience. */
 let accessToken: string | null = null;
 
@@ -55,7 +69,10 @@ export type AuthStatus =
 type AuthState = {
   status: AuthStatus;
   account: Account | null;
+  /** The gate has been answered — with an account, or by deciding not to have one. */
+  chosenGuest: boolean;
   restore: () => Promise<void>;
+  continueAsGuest: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -80,6 +97,7 @@ type TokenPair = {
 export const useAuth = create<AuthState>((set) => ({
   status: "restoring",
   account: null,
+  chosenGuest: false,
 
   /**
    * Pick up where the last session left off.
@@ -90,34 +108,45 @@ export const useAuth = create<AuthState>((set) => ({
    * working state rather than an error.
    */
   restore: async () => {
+    const chosenGuest = (await readFlag(GUEST_KEY)) === "1";
     const stored = await readRefreshToken();
+
     if (stored === null) {
-      set({ status: "guest", account: null });
+      set({ status: "guest", account: null, chosenGuest });
       return;
     }
 
     const token = await refreshAccessToken();
     if (token === null) {
-      set({ status: "guest", account: null });
+      set({ status: "guest", account: null, chosenGuest });
       return;
     }
 
     const account = await fetchAccount(token);
     set(
       account === null
-        ? { status: "guest", account: null }
-        : { status: "signed-in", account },
+        ? { status: "guest", account: null, chosenGuest }
+        : { status: "signed-in", account, chosenGuest },
     );
+  },
+
+  continueAsGuest: async () => {
+    await writeFlag(GUEST_KEY, "1");
+    set({ chosenGuest: true, status: "guest", account: null });
   },
 
   signIn: async (email, password) => {
     const account = await authenticate("/auth/login", email, password);
-    set({ status: "signed-in", account });
+    // Having an account answers the gate too, so signing out later lands in the app as a
+    // guest rather than back at a screen the person has already been through.
+    await writeFlag(GUEST_KEY, "1");
+    set({ status: "signed-in", account, chosenGuest: true });
   },
 
   signUp: async (email, password) => {
     const account = await authenticate("/auth/register", email, password);
-    set({ status: "signed-in", account });
+    await writeFlag(GUEST_KEY, "1");
+    set({ status: "signed-in", account, chosenGuest: true });
   },
 
   /**
@@ -134,6 +163,8 @@ export const useAuth = create<AuthState>((set) => ({
     generation += 1;
     inFlight = null;
     await clearRefreshToken();
+    // `chosenGuest` deliberately survives a sign-out. Someone who signs out has answered
+    // the gate; sending them back to it would read as being thrown out of the app.
     set({ status: "guest", account: null });
 
     if (stored !== null) {
@@ -264,6 +295,22 @@ async function detailOf(response: Response): Promise<string> {
     // A non-JSON error body tells us nothing the status does not.
   }
   return `HTTP ${response.status}`;
+}
+
+async function readFlag(key: string): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    return null;
+  }
+}
+
+async function writeFlag(key: string, value: string): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch {
+    // The gate will be shown again next launch. Annoying, not broken.
+  }
 }
 
 async function readRefreshToken(): Promise<string | null> {

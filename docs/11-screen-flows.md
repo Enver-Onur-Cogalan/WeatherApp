@@ -221,6 +221,46 @@ because losing them is the one thing that would make signing up feel like a puni
 | Ask history local, capped | Full synced chat history | Consistent with the privacy stance, and avoids inheriting chat-app expectations |
 | Deep-linkable İz | Screen-local state | A notification must be able to open the exact hour it is about |
 
+## The gate
+
+Added 2026-09-03, replacing a sign-in form that lived inside Sen.
+
+Three ways in, presented as three choices rather than as a form with an escape hatch
+under it: **Hesap aç**, **Giriş yap**, and **Misafir olarak devam et**. The third is
+first-class, because ADR-0009 says guest mode exists so that the first person to open
+this project does not have to create an account to look around. A guest option written as
+small grey text under a password field says the opposite of what the ADR decided.
+
+The screen says what an account is *for* — profiles and places that survive a reinstall
+and reach a second device — instead of implying that skipping it costs something.
+
+**The answer is remembered.** A gate that reappears on every launch is exactly the wall
+the ADR was written against. Signing in answers it too, so signing out later lands in the
+app as a guest rather than back at a screen the person has already been through.
+
+It is reached from two directions and is one screen, not two. Before the app has been
+entered it is the first thing shown and there is nothing behind it; from Sen, a guest who
+has changed their mind arrives with the app still underneath, so a way back appears. One
+affordance differs; everything else is shared, because two screens that must be kept in
+step eventually are not.
+
+**No atmosphere layer on it.** It would be the app's most distinctive surface and it is
+tempting — but ADR-0013 defines that layer as a second reading of the forecast rather
+than decoration, and here there is no location, no forecast, and possibly no server.
+Weather that stands for nothing is what the ADR rules out.
+
+### Where it sits
+
+`app/welcome.tsx` is a sibling of the tab group in the root stack, not a tab: signing in
+is a decision about the whole app, not a peer of the forecast. The redirect lives in
+`app/(tabs)/_layout.tsx` as a `<Redirect>` rather than in an effect, so the router owns
+the decision — navigating imperatively from an effect races the first render, mounting
+the tabs, letting them fetch, and then tearing them down.
+
+The splash screen is now held until the session is known as well as the fonts. The tabs
+render nothing while the keystore is being read, because guessing would flash a sign-in
+screen at somebody who is already signed in.
+
 ## Still open
 
 - **Transitions.** Tab changes, sheet presentation, and the shared element between a

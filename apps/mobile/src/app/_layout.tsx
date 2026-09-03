@@ -6,13 +6,12 @@ import {
 import { ArchivoBlack_400Regular } from "@expo-google-fonts/archivo-black";
 import { IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Tabs, ThemeProvider } from "expo-router";
+import { Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { TabBar } from "@/components/tab-bar";
 import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queries";
 import { colors } from "@/theme";
@@ -43,6 +42,7 @@ const instrumentTheme = {
 
 export default function RootLayout() {
   const restore = useAuth((state) => state.restore);
+  const status = useAuth((state) => state.status);
 
   // Once, at launch. A stored refresh token is spent on a real refresh before the app
   // claims to be signed in — see `lib/auth.ts`. Failing that we are a guest, which is a
@@ -59,10 +59,14 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    // Hide once the faces are resolved, either way. Holding the splash screen on a
-    // font error would trade a fallback face for a permanently blank app.
-    if (ready || error) SplashScreen.hideAsync();
-  }, [ready, error]);
+    // Held until the fonts are resolved *and* the session is known. Hiding it earlier
+    // shows a blank frame — the tabs render nothing while `restoring`, because guessing
+    // would flash a sign-in screen at someone who is already signed in.
+    //
+    // Fonts resolve either way on purpose: holding the splash on a font error would
+    // trade a fallback face for a permanently blank app.
+    if ((ready || error) && status !== "restoring") SplashScreen.hideAsync();
+  }, [ready, error, status]);
 
   if (!ready && !error) return null;
 
@@ -72,16 +76,18 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider value={instrumentTheme}>
           <StatusBar style="light" />
-          <Tabs
-            tabBar={(props) => <TabBar {...props} />}
+          {/* A stack, so the gate can exist outside the tab bar. Every file directly in
+              `app/` becomes a tab otherwise, and a sign-in screen is not a peer of the
+              forecast. */}
+          <Stack
             screenOptions={{
               headerShown: false,
-              sceneStyle: { backgroundColor: colors.ground },
-              // Tabs are peers, not a hierarchy — sliding between them implies a depth
-              // that is not there, and the user pays for it dozens of times a session.
-              animation: "none",
+              contentStyle: { backgroundColor: colors.ground },
             }}
-          />
+          >
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="welcome" options={{ animation: "fade" }} />
+          </Stack>
         </ThemeProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
