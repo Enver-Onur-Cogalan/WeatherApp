@@ -9,6 +9,7 @@ from alembic import context
 from app.auth import models as auth_models  # noqa: F401  (registers the tables)
 from app.core.config import get_settings
 from app.db.base import Base
+from app.saved import models as saved_models  # noqa: F401  (registers the tables)
 
 # Imported for the side effect of defining the mapped classes: `Base.metadata` is only
 # populated by the modules that declare tables having been imported. Autogenerate against

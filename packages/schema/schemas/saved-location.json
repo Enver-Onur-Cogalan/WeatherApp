@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weatherapp.local/schemas/saved-location.json",
+  "title": "SavedLocation",
+  "description": "A place an account asks about. The label is what the person calls it, not what a geocoder returned.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "label", "latitude", "longitude", "timezone", "created_at", "updated_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "UUIDv7, generated on the device (ADR-0015).",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "label": { "type": "string", "description": "What the person calls this place.", "minLength": 1, "maxLength": 60 },
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "timezone": {
+      "type": "string",
+      "description": "IANA name, e.g. Europe/Istanbul. Never a fixed offset, which would be wrong twice a year.",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "is_current": {
+      "type": "boolean",
+      "description": "The device's own position. At most one per account, enforced by the database rather than by whoever writes the next handler."
+    },
+    "sort_order": { "type": "integer", "description": "Where it sits in the user's own ordering.", "minimum": 0, "maximum": 9999 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time", "description": "The field conflicts are resolved on (ADR-0015)." }
+  }
+}

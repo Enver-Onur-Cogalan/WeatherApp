@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weatherapp.local/schemas/saved-profile.json",
+  "title": "SavedProfile",
+  "description": "A named profile belonging to an account. Identity and wording live here; what the scoring engine actually reads is the ActivityProfile inside it, defined once and shared with every request that carries one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "constraints", "created_at", "updated_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "UUIDv7, generated on the device so a guest can create one with no network and signing up later renumbers nothing (ADR-0015).",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "name": {
+      "type": "string",
+      "description": "What the person calls it — \"Sabah koşusu\" — not the activity slug.",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "constraints": { "$ref": "https://weatherapp.local/schemas/activity-profile.json" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The field conflicts are resolved on. Last write wins per record (ADR-0015), so a client sending an older value than the server holds is told about the newer one rather than overwriting it.",
+      "$comment": "UTC, always."
+    }
+  }
+}

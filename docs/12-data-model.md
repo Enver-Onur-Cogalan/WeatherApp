@@ -170,9 +170,54 @@ disposable, and profiles never are.
 
 ## What exists so far
 
-`users` and `refresh_tokens`, created by Alembic (2026-09-03). `ActivityProfile`,
-`SavedLocation` and `NotificationRule` are still specified rather than built, so the
-profiles the app sends are constants in the client.
+`users`, `refresh_tokens`, `saved_profiles` and `saved_locations`, created by Alembic
+(2026-09-03). `NotificationRule` is still specified rather than built. The client still
+sends constants, because nothing on the device reads these endpoints yet.
+
+**The stored profile is split in two, and the split is deliberate.** `ActivityProfile` in
+`packages/schema` is what the scoring engine reads, and it is sent inline with every
+`/plan` and `/ask` request. `SavedProfile` wraps it with the things only a *stored* profile
+has: an id, a name a person chose, and the timestamps conflicts are resolved on. The
+constraints are referenced rather than repeated, so there is still one definition of what
+the engine reads — copying those seven fields into a second schema is the drift the
+package exists to prevent.
+
+**`user_id` is `NOT NULL` here, where the table above says nullable.** That row describes
+the *device's* schema, where a profile has no owner until an account exists. On the server
+a guest has no rows at all, so a nullable owner would create a second kind of row that
+nothing owns and no query filters by — the confusion guest mode is designed to avoid.
+This document's own opening sentence is the licence: the two stores are not the same
+schema, and pretending otherwise is how sync bugs start.
+
+### Invariants the database holds
+
+Three rules live in Postgres rather than in a handler, because a handler is something a
+future writer has to remember:
+
+- `temp_min <= temp_max`, the one cross-field rule JSON Schema cannot express.
+- `preferred_hours` has exactly two elements.
+- At most one current location per account, as a partial unique index — many rows with
+  `is_current = false`, at most one with `true`. A plain unique constraint on `user_id`
+  would have allowed only one saved place in total.
+
+Each is tested by writing a row that violates it directly, bypassing the API. A constraint
+nothing has ever violated is a comment with a `CREATE` statement attached.
+
+### Writes, and what a conflict looks like
+
+`PUT` rather than `POST`, because the client names the resource (ADR-0015). That makes a
+retry after a dropped response harmless instead of a duplicate.
+
+The last-write-wins rule is compared strictly: a write whose `updated_at` is *equal* to
+the stored value is treated as stale, because it is a resend of what the server already
+holds. A losing write is answered `409` **with the record that won**, not a bare error —
+the ADR accepts that an edit can disappear, but a client that is never told which version
+survived will resend an edit that can never land.
+
+One defect surfaced while testing ownership. Lookups are scoped by owner and the primary
+key is global, so an account writing to an id belonging to somebody else found nothing of
+its own, tried to insert, and collided — surfacing a 500 from inside the driver, which is
+both an unhelpful answer and a usable signal that the id exists. It is a `409` now.
 
 Tests run against a real Postgres rather than SQLite, in CI as well as locally. `uuid`,
 `timestamptz` and `ON DELETE CASCADE` all behave differently or not at all on SQLite, and

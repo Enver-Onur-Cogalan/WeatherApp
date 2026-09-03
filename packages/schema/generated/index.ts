@@ -7,3 +7,5 @@ export { ForecastHour } from "./forecast-hour";
 export { PlanRequest } from "./plan-request";
 export { PlanResponse } from "./plan-response";
 export { PlanResult } from "./plan-result";
+export { SavedLocation } from "./saved-location";
+export { SavedProfile } from "./saved-profile";
