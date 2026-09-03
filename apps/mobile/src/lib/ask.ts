@@ -100,8 +100,19 @@ const UNKNOWN = {
   detail: "Ne olduğunu söyleyemiyoruz. Tekrar denemek bir sonuç vermezse günlüklere bak.",
 };
 
-export function describeError(error: unknown): { title: string; detail: string } {
-  if (error instanceof ApiError) return MESSAGES[error.kind];
+export type Described = { title: string; detail: string; technical?: string };
+
+/**
+ * The `technical` line is the address, the status, or the field that failed.
+ *
+ * Added after a device session where the screen said "sunucuya ulaşılamıyor" and the
+ * cause — the backend was simply not running — took a round trip of questions to
+ * establish. The interface knew which address it had tried and did not say. Naming it
+ * turns "check the network" into something a person can actually check, which is what
+ * docs/10 means by offering a fix.
+ */
+export function describeError(error: unknown): Described {
+  if (error instanceof ApiError) return { ...MESSAGES[error.kind], technical: error.message };
   return UNKNOWN;
 }
 

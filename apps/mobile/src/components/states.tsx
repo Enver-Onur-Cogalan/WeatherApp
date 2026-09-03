@@ -23,13 +23,14 @@ export function Failure({
   error: unknown;
   onRetry?: () => void;
 }) {
-  const { title, detail } = describeError(error);
+  const { title, detail, technical } = describeError(error);
   const retryable = onRetry !== undefined && isWorthRetrying(error);
 
   return (
     <View style={styles.card}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.detail}>{detail}</Text>
+      {technical ? <Text style={styles.technical}>{technical}</Text> : null}
       {retryable ? (
         <Pressable onPress={onRetry} style={styles.retry} accessibilityRole="button">
           <Text style={styles.retryText}>Tekrar dene</Text>
@@ -65,6 +66,9 @@ const styles = StyleSheet.create({
   },
   title: { ...type.label, color: colors.ember },
   detail: { ...type.body, fontSize: size.caption, lineHeight: 20, color: colors.ink2 },
+  // Monospaced: this line is an address or a field path, and it is meant to be read
+  // character by character rather than skimmed.
+  technical: { ...type.data, fontSize: 11, lineHeight: 16, color: colors.inkDim },
   retry: {
     alignSelf: "flex-start",
     marginTop: space.xs,

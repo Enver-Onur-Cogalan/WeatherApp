@@ -144,6 +144,27 @@ reintroduced one directory away. Two of those copies were already wrong — the 
 `best_window` carries no `length_hours`, though the ranked windows in a plan do, and the
 app was typed to read a field the API never sends.
 
+### Running it against a local backend
+
+`npm run api` from the repository root, or `docker compose up`. The address is derived
+from Metro — the dev server reports the host the phone actually connected on, so a phone
+on the LAN gets the Mac's LAN address and nothing needs configuring. `EXPO_PUBLIC_API_URL`
+overrides it.
+
+Two failures look identical from the phone and neither is the app's fault, which is why
+there is a script rather than a command in a README:
+
+- **uvicorn binds `127.0.0.1` by default.** That is the Mac's own loopback, so the
+  service is invisible from the phone while being perfectly healthy from `curl` on the
+  Mac. Everything about the phone looks correct — same Wi-Fi, right address, no answer.
+- **`JWT_SECRET` is required and has a minimum length.** Without it the service exits
+  during startup with a Pydantic validation error raised inside a lifespan handler, which
+  is a long way from "set this variable".
+
+Both cost a round trip of questions on the first device session, with the screen saying
+*sunucuya ulaşılamıyor* and being entirely right. The failure card now prints the address
+it tried, because the interface knew and did not say.
+
 ### Error states, and why they arrive with the network
 
 The app had no failure path anywhere in the interface, for the simple reason that a

@@ -11,7 +11,8 @@
     "mobile:android": "npm run android --workspace @weatherapp/mobile",
     "typecheck": "npm run typecheck --workspace @weatherapp/mobile",
     "lint": "npm run lint --workspace @weatherapp/mobile",
-    "schema": "node packages/schema/scripts/generate.mjs"
+    "schema": "node packages/schema/scripts/generate.mjs",
+    "api": "./services/api/run-dev.sh"
   },
   "engines": {
     "node": ">=20"
