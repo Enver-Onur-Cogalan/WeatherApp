@@ -12,12 +12,18 @@ from typing import Annotated
 
 import httpx
 import redis.asyncio as aioredis
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import PlanningAgent
 from app.agent.provider import OllamaProvider
+from app.auth.limiter import Counter, RateLimiter
+from app.auth.models import User
+from app.auth.tokens import TokenError, read_access_token
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
+from app.db.session import get_session
 from app.weather.cache import ForecastCache, RedisLike
 from app.weather.client import OpenMeteoClient
 from app.weather.service import WeatherService
@@ -91,4 +97,68 @@ def _typecheck_redis(client: aioredis.Redis) -> RedisLike:
     `ForecastCache` deliberately depends on two methods rather than on Redis itself, so
     its tests need no server. This keeps that from drifting into a lie.
     """
+    return client
+
+
+# ---------------------------------------------------------------- authentication
+
+
+async def get_rate_limiter() -> RateLimiter:
+    return RateLimiter(_redis if _redis is not None else None)
+
+
+RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
+
+# `auto_error=False` so that a request with no credentials reaches the dependency rather
+# than being rejected in the middleware. Guest mode needs to be able to tell "no token"
+# from "bad token", and only one of those is an error (ADR-0009).
+_bearer = HTTPBearer(auto_error=False)
+
+CredentialsDep = Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]
+AuthSessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+async def get_optional_user(
+    credentials: CredentialsDep, session: AuthSessionDep
+) -> User | None:
+    """The signed-in user, or `None` for a guest.
+
+    A guest is the absence of a user, not a user with a flag — so this returns `None` and
+    the endpoints that accept both branch on it. A malformed or expired token also
+    resolves to `None` here: an endpoint open to guests should serve a guest rather than
+    fail, and the endpoints that genuinely require an account use `get_current_user`,
+    which raises.
+    """
+    if credentials is None:
+        return None
+
+    try:
+        user_id = read_access_token(credentials.credentials)
+    except TokenError:
+        return None
+
+    return await session.get(User, user_id)
+
+
+async def get_current_user(user: Annotated[User | None, Depends(get_optional_user)]) -> User:
+    """The signed-in user, or 401.
+
+    Built on the optional form so there is one place that reads a token, and one place
+    that decides an absent one is fatal.
+    """
+    if user is None:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in to use this",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]
+
+
+def _typecheck_counter(client: aioredis.Redis) -> Counter:
+    """Same pin as `_typecheck_redis`, for the two commands the limiter uses."""
     return client

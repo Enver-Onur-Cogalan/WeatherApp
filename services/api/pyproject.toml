@@ -6,13 +6,19 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
-    "pydantic>=2.9",
+    # 'email' extra: EmailStr on the auth endpoints needs email-validator, and Pydantic
+    # raises at import time rather than at validation time when it is missing.
+    "pydantic[email]>=2.9",
     "pydantic-settings>=2.6",
     "httpx>=0.28",
     "redis>=5.2",
     "sqlalchemy>=2.0",
     "alembic>=1.14",
     "asyncpg>=0.30",
+    # SQLAlchemy's async layer bridges to its sync internals through greenlets. It is a
+    # transitive dependency in practice but not a declared one, and its absence surfaces
+    # only when a connection is actually opened — well past import, install and lint.
+    "greenlet>=3.1",
     "argon2-cffi>=23.1",
     "pyjwt>=2.10",
     "structlog>=24.4",
@@ -30,9 +36,18 @@ dev = [
 [tool.ruff]
 line-length = 96
 target-version = "py311"
-# Generated from packages/schema. Formatted, but not linted — its line lengths come
-# from schema descriptions, which should not be truncated to satisfy a linter.
-extend-exclude = ["app/schemas"]
+# `app/schemas` is generated from packages/schema; its line lengths come from schema
+# descriptions, which should not be truncated to satisfy a linter. `alembic/versions` is
+# applied history — a migration that has run everywhere should not be rewritten to change
+# a quote style, and Alembic's template is Alembic's to own.
+extend-exclude = ["app/schemas", "alembic/versions"]
+
+# Without this an exclusion is ignored for any path named explicitly on the command line,
+# which is exactly what an editor's format-on-save does. That gap is why the generated
+# Pydantic ended up reformatted in the repository while the generator kept emitting the
+# unformatted form, and the schema CI job failed on a diff that had nothing to do with
+# any schema.
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]

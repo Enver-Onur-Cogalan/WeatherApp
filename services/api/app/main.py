@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
-from app.api import ask, health, plan
+from app.api import ask, auth, health, plan
 from app.core import deps
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger, request_id_var
@@ -60,5 +60,6 @@ async def attach_request_id(
 
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(plan.router)
 app.include_router(ask.router)

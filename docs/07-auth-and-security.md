@@ -61,6 +61,29 @@ Upgrading a guest to an account migrates the local profiles up. It does not star
 - Every request body is a Pydantic model. Unvalidated input never reaches business logic.
 - Rate limiting per account and per IP, backed by Redis.
 
+## What is built, and what the building taught us
+
+Server side, 2026-09-03. Argon2id passwords, 15-minute access tokens, 30-day rotating
+refresh tokens with family revocation, five endpoints, rate limiting, and Alembic
+migrations. Guest mode is the absence of an account rather than a flag on one: the
+planning endpoints accept no credentials at all, and an expired token on an open endpoint
+serves a guest rather than failing.
+
+Two details are worth writing down because both were wrong first.
+
+**The theft response has to outlive the request that triggers it.** When a replayed
+refresh token is detected the whole family is revoked and the request then fails with
+401. The session dependency rolls back when a handler raises — which threw the revocation
+away and left the stolen token working. The revocation is now committed before the error
+is raised, because the write is the entire point of detecting the replay and cannot share
+the fate of the response.
+
+**The test suite said this worked.** Its session override yielded a session and never
+rolled anything back, so every handler that raised still had its writes visible — every
+test was quietly more forgiving than production. The override now mirrors the real
+dependency, and it fails without the fix. The defect was found by running the sequence
+against the live service with curl, not by the suite that was meant to cover it.
+
 ## Threat model, stated honestly
 
 This is a self-hosted application handling low-sensitivity data: locations and activity

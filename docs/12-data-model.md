@@ -168,6 +168,23 @@ Every device migration must be **idempotent** and must not destroy user-owned da
 migration cannot be made safe, the cache is dropped and re-fetched — a cache is always
 disposable, and profiles never are.
 
+## What exists so far
+
+`users` and `refresh_tokens`, created by Alembic (2026-09-03). `ActivityProfile`,
+`SavedLocation` and `NotificationRule` are still specified rather than built, so the
+profiles the app sends are constants in the client.
+
+Tests run against a real Postgres rather than SQLite, in CI as well as locally. `uuid`,
+`timestamptz` and `ON DELETE CASCADE` all behave differently or not at all on SQLite, and
+a suite that passes against an engine the service never uses proves less than it looks
+like it does. The cascade in particular is asserted rather than assumed — "deletion is
+real deletion" is a claim above, and an untested cascade is how such a claim quietly
+becomes false.
+
+The suite builds its schema from the models with `create_all`, which cannot notice a
+migration that disagrees with them. CI runs `alembic upgrade head` and `alembic check`
+against an empty database for exactly that gap.
+
 ## Still open
 
 - **Retention on `ForecastHour`.** Rows accumulate; nothing prunes them yet. The device

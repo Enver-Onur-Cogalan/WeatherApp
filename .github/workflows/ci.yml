@@ -16,6 +16,29 @@ jobs:
     defaults:
       run:
         working-directory: services/api
+
+    # A real Postgres rather than SQLite. `uuid`, `timestamptz` and `ON DELETE CASCADE`
+    # behave differently or not at all on SQLite, and a suite that passes against an
+    # engine the service never uses proves less than it appears to.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: weather
+          POSTGRES_PASSWORD: weather
+          POSTGRES_DB: weather_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U weather"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://weather:weather@localhost:5432/weather_test
+      JWT_SECRET: ci-secret-not-for-use-anywhere-real-0123456789
+
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +59,14 @@ jobs:
 
       - name: Tests
         run: uv run pytest -q
+
+      # The suite builds its schema from the models, so it cannot notice a migration that
+      # disagrees with them. This can: applying every migration to an empty database and
+      # then asking Alembic whether anything is still missing.
+      - name: Migrations apply, and match the models
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
 
   mobile:
     name: Mobile — types and lint
