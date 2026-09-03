@@ -206,10 +206,9 @@ person fight the control instead of expressing a limit.
 
 ## Still open
 
-- **Guest profiles are not stored at all.** A guest gets the three built-in defaults and
-  cannot edit them, because nothing persists on the device yet. That also means the
-  guest-to-account migration ADR-0009 calls the fiddliest part of the feature has nothing
-  to migrate, and is not built.
+- **Guest-to-account migration is unbuilt.** A guest's profiles now persist (docs/12), so
+  the upload ADR-0009 calls the fiddliest part of the feature finally has something to
+  move — but it does not happen yet, and signing up leaves local profiles where they are.
 - **One hard-coded location.** `Konumlar` is listed under Sen in docs/11 and unbuilt, so
   the app asks about İstanbul and now at least *says* so on both screens — the smaller
   half of F3. The larger half needs somewhere to store a place.

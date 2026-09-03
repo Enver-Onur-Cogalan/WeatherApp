@@ -11,6 +11,7 @@
     "@shopify/react-native-skia": "2.6.2",
     "@tanstack/react-query": "^5.102.8",
     "@weatherapp/schema": "*",
+    "drizzle-orm": "^0.45.2",
     "expo": "~57.0.17",
     "expo-constants": "~57.0.17",
     "expo-crypto": "~57.0.2",
@@ -22,6 +23,7 @@
     "expo-router": "~57.0.17",
     "expo-secure-store": "~57.0.3",
     "expo-splash-screen": "~57.0.8",
+    "expo-sqlite": "~57.0.2",
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.2",
     "expo-system-ui": "~57.0.3",
@@ -39,7 +41,9 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "babel-plugin-inline-import": "^3.0.0",
     "canvaskit-wasm": "^0.41.0",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
@@ -52,7 +56,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "check-shaders": "node scripts/check-shaders.mjs"
+    "check-shaders": "node scripts/check-shaders.mjs",
+    "db:generate": "drizzle-kit generate",
+    "check-migrations": "node --no-warnings scripts/check-migrations.mjs"
   },
   "private": true
 }

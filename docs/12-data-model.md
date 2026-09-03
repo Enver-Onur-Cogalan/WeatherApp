@@ -230,8 +230,68 @@ The suite builds its schema from the models with `create_all`, which cannot noti
 migration that disagrees with them. CI runs `alembic upgrade head` and `alembic check`
 against an empty database for exactly that gap.
 
+## The device side
+
+Built 2026-09-03, with Drizzle over `expo-sqlite`. Two tables so far: `saved_profiles`
+and `ask_exchanges`.
+
+**This is what makes guest mode real.** Before it, a guest got three constants they could
+not change, and "everything works without an account" was only true of the parts that
+needed no storage. A guest's profiles now persist, and are edited through exactly the
+same screen an account's are — one interface over two stores, so the two paths cannot
+drift into behaving differently.
+
+The schemas genuinely differ, as this document insists they should. `user_id` really is
+nullable here, because a guest's rows are the normal case; on the server they cannot
+exist. Timestamps are text, because they cross the wire as RFC 3339 and are compared as
+strings for last-write-wins — storing epoch integers would mean converting twice on every
+read and write to gain nothing, and ISO-8601 in UTC already sorts lexicographically.
+SQLite has no array type, so `preferred_hours` is two columns.
+
+`saved_profiles` carries a `pending` flag: the edit queue ADR-0015 describes, in one
+column. A guest's rows are all pending by definition — there is nowhere to send them —
+and become the upload payload the moment an account exists.
+
+`ask_exchanges` never leaves the device, even when an account does exist. What someone
+asks an assistant is more revealing than which profiles they keep. Capped at twenty,
+oldest evicted, in one statement rather than a count followed by a delete — the gap
+between two statements is where a concurrent insert makes the cap wrong.
+
+### Migrations, and the two halves of getting them into the bundle
+
+`drizzle-kit generate` emits SQL plus a `migrations.js` that imports it, and both have to
+end up inside the app: a phone has no filesystem to read `.sql` from at launch. Two
+pieces of configuration are needed and **each one alone fails in a way that looks like the
+other is missing**:
+
+- `sourceExts.push("sql")` in `metro.config.js`, or the resolver reports "None of these
+  files exist" about a file that plainly does.
+- `babel-plugin-inline-import` for `.sql`, or the resolver finds the file and hands it to
+  the JavaScript parser, which fails on `CREATE TABLE`.
+
+Neither was discovered by reading; the bundle simply refused to build. The project had no
+Metro or Babel config before this, which was correct — `babel-preset-expo` is what
+configures the worklets plugin Reanimated needs, so the new Babel config keeps the preset
+and adds one plugin.
+
+A failed migration is the one storage error the app stops for. docs' rule is that a
+device migration must never destroy user-owned data, which means there is nothing safe to
+do automatically when one fails: the obvious repair — drop and rebuild — is exactly what
+would throw away the profiles the rule protects. The app says so and stops.
+
+`npm run check-migrations` applies every migration to an empty database using Node's own
+SQLite, so CI covers this half without a device or a simulator. Verified by breaking a
+migration on purpose. What it cannot check is a migration against a database written by
+an older version of the app; that needs a fixture per released schema, and there has been
+one.
+
 ## Still open
 
+- **The forecast cache is not on the device.** TanStack Query holds it for the life of a
+  session, and the `ForecastHour` table in this document is unbuilt — so the app still
+  needs a reachable server on every launch.
+- **Guest-to-account migration is unbuilt.** Now that a guest's profiles exist, the
+  upload ADR-0009 calls the fiddliest part of the feature finally has something to move.
 - **Retention on `ForecastHour`.** Rows accumulate; nothing prunes them yet. The device
   needs a ceiling, and the server needs to decide whether it keeps history at all.
 - **Historical comparison.** *"6° warmer than yesterday"* needs past observations, which is

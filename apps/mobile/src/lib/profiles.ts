@@ -15,10 +15,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SavedProfile } from "@weatherapp/schema";
 import { z } from "zod";
 
+import {
+  deleteLocalProfile,
+  saveLocalProfile,
+  seedLocalProfiles,
+  useLocalProfiles,
+} from "@/db/profiles";
 import { ApiError, request } from "@/lib/api";
 import { TIMEOUT_MS } from "@/lib/config";
 import { useAuth } from "@/lib/auth";
 import { PROFILES, type ActivityKey, type ActivityProfile } from "@/lib/plan";
+import { uuidv7 } from "@/lib/uuid";
 
 const ProfileList = z.array(SavedProfile);
 
@@ -60,25 +67,29 @@ export function useProfiles() {
   });
 }
 
+const asChoice = (profile: SavedProfile): Choice => ({
+  key: profile.id,
+  id: profile.id,
+  label: profile.name,
+  constraints: profile.constraints,
+});
+
 /**
- * What the chips offer: saved profiles when there are any, the built-in three otherwise.
+ * What the chips offer.
+ *
+ * An account's profiles when signed in, the device's own when not. The built-in three are
+ * the floor in both cases: İz always has something to draw, and an empty list is never a
+ * state the person has to clear before the app works.
  */
 export function useChoices(): { choices: Choice[]; saved: boolean } {
-  const { data } = useProfiles();
+  const signedIn = useAuth((state) => state.status === "signed-in");
+  const { data: remote } = useProfiles();
+  const local = useLocalProfiles();
 
-  if (data === undefined || data.length === 0) {
-    return { choices: BUILT_IN, saved: false };
-  }
+  const profiles = signedIn ? (remote ?? []) : local;
 
-  return {
-    choices: data.map((profile) => ({
-      key: profile.id,
-      id: profile.id,
-      label: profile.name,
-      constraints: profile.constraints,
-    })),
-    saved: true,
-  };
+  if (profiles.length === 0) return { choices: BUILT_IN, saved: false };
+  return { choices: profiles.map(asChoice), saved: true };
 }
 
 export function useSaveProfile() {
@@ -122,4 +133,68 @@ export function useDeleteProfile() {
       }),
     onSuccess: () => client.invalidateQueries({ queryKey: ["profiles"] }),
   });
+}
+
+
+/**
+ * One interface over two stores.
+ *
+ * The profiles screen should not know whether it is talking to a server or to SQLite —
+ * the difference is where the person's data lives, not what the screen does with it. It
+ * also means the guest and account paths cannot drift into behaving differently, which
+ * ADR-0009 already warns is the cost of having two.
+ */
+export type ProfileStore = {
+  profiles: SavedProfile[];
+  isPending: boolean;
+  isError: boolean;
+  /** True while a write is in flight; only the remote store can be slow enough to matter. */
+  saving: boolean;
+  save: (profile: SavedProfile) => void;
+  remove: (id: string) => void;
+  seed: () => void;
+};
+
+export function useProfileStore(): ProfileStore {
+  const signedIn = useAuth((state) => state.status === "signed-in");
+
+  const query = useProfiles();
+  const saveRemote = useSaveProfile();
+  const deleteRemote = useDeleteProfile();
+  const local = useLocalProfiles();
+
+  if (signedIn) {
+    return {
+      profiles: query.data ?? [],
+      isPending: query.isPending,
+      isError: query.isError,
+      saving: saveRemote.isPending,
+      save: (profile) => saveRemote.mutate(profile),
+      remove: (id) => deleteRemote.mutate(id),
+      seed: () => BUILT_IN.forEach((choice) => saveRemote.mutate(fromBuiltIn(choice))),
+    };
+  }
+
+  return {
+    profiles: local,
+    // SQLite answers within the frame; a spinner would flash rather than inform.
+    isPending: false,
+    isError: false,
+    saving: false,
+    save: (profile) => void saveLocalProfile(profile),
+    remove: (id) => void deleteLocalProfile(id),
+    seed: () => void seedLocalProfiles(BUILT_IN),
+  };
+}
+
+/** A built-in default, as a record that can be stored. */
+export function fromBuiltIn(choice: Choice): SavedProfile {
+  const now = new Date().toISOString();
+  return {
+    id: uuidv7(),
+    name: choice.label,
+    constraints: choice.constraints,
+    created_at: now,
+    updated_at: now,
+  };
 }

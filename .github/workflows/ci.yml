@@ -94,6 +94,13 @@ jobs:
       - name: Shaders compile
         run: npm run check-shaders --workspace apps/mobile
 
+      # The server's migrations are covered by `alembic upgrade` above. The device's had
+      # nothing: generated SQL, bundled into the app, first executed on somebody's phone.
+      # docs/12 calls that the harder half, because a failed migration on a phone is not
+      # one you can go and fix. Node ships SQLite, so this needs no device.
+      - name: Device migrations apply
+        run: npm run check-migrations --workspace apps/mobile
+
   schema:
     name: Schema — generated files are current
     runs-on: ubuntu-latest

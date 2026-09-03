@@ -17,13 +17,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import {
-  BUILT_IN,
-  useDeleteProfile,
-  useProfiles,
-  useSaveProfile,
-  type SavedProfile,
-} from "@/lib/profiles";
+import { BUILT_IN, useProfileStore, type SavedProfile } from "@/lib/profiles";
 import { type ActivityProfile } from "@/lib/plan";
 import { uuidv7 } from "@/lib/uuid";
 import { colors, radius, size, space, type } from "@/theme";
@@ -39,19 +33,18 @@ const LIMITS = [
 type LimitKey = (typeof LIMITS)[number]["key"];
 
 export function Profiles() {
-  const { data, isPending, isError } = useProfiles();
-  const save = useSaveProfile();
-  const remove = useDeleteProfile();
+  const store = useProfileStore();
   const [editing, setEditing] = useState<SavedProfile | null>(null);
 
   if (editing !== null) {
     return (
       <Editor
         profile={editing}
-        busy={save.isPending}
+        busy={store.saving}
         onCancel={() => setEditing(null)}
         onSave={(next) => {
-          save.mutate(next, { onSuccess: () => setEditing(null) });
+          store.save(next);
+          setEditing(null);
         }}
       />
     );
@@ -61,17 +54,17 @@ export function Profiles() {
     <View style={styles.card}>
       <Text style={styles.label}>Profiller</Text>
 
-      {isPending ? (
+      {store.isPending ? (
         <Text style={styles.note}>Yükleniyor…</Text>
-      ) : isError ? (
+      ) : store.isError ? (
         <Text style={styles.failure}>Profiller alınamadı. Sen sekmesini yeniden aç.</Text>
-      ) : data !== undefined && data.length > 0 ? (
-        data.map((profile) => (
+      ) : store.profiles.length > 0 ? (
+        store.profiles.map((profile) => (
           <Row
             key={profile.id}
             profile={profile}
             onEdit={() => setEditing(profile)}
-            onDelete={() => remove.mutate(profile.id)}
+            onDelete={() => store.remove(profile.id)}
           />
         ))
       ) : (
@@ -90,12 +83,12 @@ export function Profiles() {
           <Text style={styles.actionText}>Yeni profil</Text>
         </Pressable>
 
-        {data !== undefined && data.length === 0 ? (
+        {store.profiles.length === 0 ? (
           // Offered rather than done automatically. Seeding an account on first sign-in
           // would write data the person never created, in an account whose premise is
           // that it stores what they ask it to.
           <Pressable
-            onPress={() => BUILT_IN.forEach((choice) => save.mutate(fromBuiltIn(choice)))}
+            onPress={store.seed}
             style={styles.action}
             accessibilityRole="button"
           >
@@ -312,17 +305,6 @@ function blank(): SavedProfile {
     id: uuidv7(),
     name: "Yeni profil",
     constraints: { ...BUILT_IN[0].constraints },
-    created_at: now,
-    updated_at: now,
-  };
-}
-
-function fromBuiltIn(choice: (typeof BUILT_IN)[number]): SavedProfile {
-  const now = new Date().toISOString();
-  return {
-    id: uuidv7(),
-    name: choice.label,
-    constraints: choice.constraints,
     created_at: now,
     updated_at: now,
   };

@@ -26,6 +26,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { recordExchange, useExchanges } from "@/db/exchanges";
 import { Failure } from "@/components/states";
 import { Thinking } from "@/components/thinking";
 import {
@@ -42,7 +43,10 @@ import { colors, radius, size, space, type } from "@/theme";
 
 export function AskScreen() {
   const [draft, setDraft] = useState("");
-  const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  // Read from SQLite rather than held in component state: history survived exactly as
+  // long as the screen did before, which docs/11 lists as deletion by accident rather
+  // than by choice.
+  const exchanges = useExchanges();
   const [pending, setPending] = useState<string | null>(null);
   const scroller = useRef<ScrollView>(null);
   // The first profile, which is the one İz opens on. Asking about a different profile
@@ -65,10 +69,7 @@ export function AskScreen() {
 
     ask.mutate(asked, {
       onSuccess: (response) => {
-        setExchanges((current) => [
-          ...current,
-          { id: `${Date.now()}`, question: asked, response },
-        ]);
+        void recordExchange(asked, response);
         setPending(null);
         toEnd();
       },

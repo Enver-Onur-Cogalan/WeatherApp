@@ -36,13 +36,15 @@ export function YouScreen() {
             <ActivityIndicator color={colors.burnHi} size="small" />
           </View>
         ) : status === "signed-in" && account !== null ? (
-          <>
-            <SignedIn email={account.email} />
-            <Profiles />
-          </>
+          <SignedIn email={account.email} />
         ) : (
           <Guest />
         )}
+
+        {/* Profiles belong to a person whether or not that person has an account. A
+            guest's live in SQLite on the device; an account's live on the server. The
+            screen is the same either way, which is what stops the two paths drifting. */}
+        {status !== "restoring" ? <Profiles /> : null}
 
         <Text style={styles.pending}>
           Konumlar, bildirimler ve asistan durumu buraya gelecek.
@@ -88,8 +90,8 @@ function Guest() {
     <View style={styles.card}>
       <Text style={styles.label}>Misafirsin</Text>
       <Text style={styles.note}>
-        Her şey çalışıyor ve hiçbir şey cihazından çıkmıyor. Hesap açarsan profillerin ve
-        konumların sunucuna kaydolur, ikinci cihazından da açılır.
+        Her şey çalışıyor ve hiçbir şey cihazından çıkmıyor. Profillerin bu telefonda
+        saklanıyor. Hesap açarsan sunucuna kaydolur, ikinci cihazından da açılır.
       </Text>
       <Pressable
         onPress={() => router.push("/welcome")}

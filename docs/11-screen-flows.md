@@ -261,6 +261,14 @@ The splash screen is now held until the session is known as well as the fonts. T
 render nothing while the keystore is being read, because guessing would flash a sign-in
 screen at somebody who is already signed in.
 
+## History
+
+Sor's exchanges survive a launch as of 2026-09-03, in SQLite. They were component state
+before, which meant everything disappeared on restart — deletion by accident rather than
+by choice, as this document already noted.
+
+Twenty rows, oldest evicted, and never uploaded even when an account exists.
+
 ## Still open
 
 - **Transitions.** Tab changes, sheet presentation, and the shared element between a
