@@ -73,6 +73,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install ruff
+        # The generator formats its Pydantic output, so that regenerating is idempotent
+        # and this job's diff check means what it says.
+        run: pipx install ruff
+
       - name: Regenerate
         run: node packages/schema/scripts/generate.mjs
 
@@ -85,6 +90,17 @@ jobs:
             git diff --stat
             exit 1
           fi
+
+      - run: npm ci
+
+      # Regenerating cleanly proves the generated files match the JSON Schemas. It
+      # proves nothing about whether either matches what the server sends — and a
+      # `format: date-time` mapped to Zod's bare `.datetime()` was internally
+      # consistent, regenerated clean, and rejected every real response, because
+      # Python writes `+00:00` where that reading demands `Z`. These fixtures are
+      # recordings from a live backend, so the round trip is checkable with no server.
+      - name: Recorded responses still validate
+        run: npm run check-contract --workspace packages/schema
 
   evals:
     name: Evals — agent behaviour

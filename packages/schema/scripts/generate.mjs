@@ -13,6 +13,7 @@
  * generator people stop running.
  */
 
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -82,7 +83,12 @@ function zodFor(node, root, imports) {
     if (resolved.minLength !== undefined) out += `.min(${resolved.minLength})`;
     if (resolved.maxLength !== undefined) out += `.max(${resolved.maxLength})`;
     if (resolved.pattern) out += `.regex(/${resolved.pattern}/)`;
-    if (resolved.format === "date-time") out += ".datetime()";
+    // `{ offset: true }` is not optional here. Zod's bare `.datetime()` accepts only a
+    // trailing `Z`, while Python's `datetime.isoformat()` — what the API actually
+    // returns — writes `+00:00`. Both are valid RFC 3339; the narrower reading rejected
+    // every real response, and the client's error for that is "the schema has drifted",
+    // which would have been a confusing thing to be told about correct data.
+    if (resolved.format === "date-time") out += ".datetime({ offset: true })";
   } else if (type === "integer" || type === "number") {
     out = type === "integer" ? "z.number().int()" : "z.number()";
     if (resolved.minimum !== undefined) out += `.min(${resolved.minimum})`;
@@ -266,5 +272,49 @@ writeFileSync(
   join(pydanticDir, "__init__.py"),
   [BANNER_PY, ""].join("\n"),
 );
+
+/**
+ * Format the Pydantic output before anyone sees it.
+ *
+ * The generated files are committed, and CI regenerates them and fails on any diff — so
+ * generation has to be idempotent. It was not: this script emitted unformatted Python,
+ * a `ruff format` run afterwards reflowed it, and the reformatted version was what got
+ * committed. Regenerating then produced a diff every time, on eight files, for reasons
+ * that had nothing to do with any schema.
+ *
+ * `services/api/pyproject.toml` already excludes `app/schemas` from ruff, which is why
+ * this went unnoticed — an exclusion does not apply to a path named explicitly on the
+ * command line, so a formatting hook reached them anyway. The exclusion says "not our
+ * style to police"; the comment above it says "formatted, but not linted". Both are
+ * satisfied by formatting them here, once, as part of producing them.
+ */
+const RUFF = [
+  // The service's own virtualenv first: that is the version the API is developed and
+  // linted with, and formatting has to agree with it rather than with whatever happens
+  // to be installed globally.
+  join(here, "..", "..", "..", "services", "api", ".venv", "bin", "ruff"),
+  "ruff",
+];
+
+const formatted = RUFF.some((ruff) => {
+  try {
+    execFileSync(ruff, ["format", "--quiet", "--line-length", "96", pydanticDir], {
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+if (!formatted) {
+  // Loud, because the alternative is output that differs from everyone else's and a CI
+  // failure that points at the schemas rather than at the missing tool.
+  console.error(
+    "\nruff is not on PATH. The Pydantic output is unformatted and will not match what " +
+      "is committed. Install it (`uv tool install ruff`) and run this again.",
+  );
+  process.exit(1);
+}
 
 console.log(`\n${files.length} schema(s) generated.`);

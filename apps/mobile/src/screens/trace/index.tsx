@@ -25,6 +25,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Atmosphere } from "@/components/atmosphere";
 import { Now } from "@/components/now";
+import { Failure, Loading } from "@/components/states";
 import { Trace } from "@/components/trace";
 import { Week } from "@/components/week";
 import {
@@ -38,23 +39,80 @@ import {
   formatAge,
   formatWindowDay,
   formatWindowSpan,
-  getPlan,
   sliceFor,
   type ActivityKey,
+  type PlanResult,
   type Span,
 } from "@/lib/plan";
+import { DEFAULT_LOCATION } from "@/lib/config";
+import { usePlan } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
 
 const GUTTER = space.lg;
 
 export function TraceScreen() {
-  const { width } = useWindowDimensions();
   const [activity, setActivity] = useState<ActivityKey>("running");
+  const { data: plan, error, isPending, refetch } = usePlan(activity);
+
+  // Switching activity keeps the previous trace on screen while the new one is scored
+  // (`keepPreviousData`), so these two states are only ever the *first* load — which is
+  // the one where there is genuinely nothing to show.
+  if (isPending) {
+    return (
+      <Shell>
+        <Loading label="Tahmin alınıyor" />
+      </Shell>
+    );
+  }
+
+  if (error) {
+    return (
+      <Shell>
+        <Failure error={error} onRetry={() => void refetch()} />
+      </Shell>
+    );
+  }
+
+  return (
+    <Loaded
+      plan={plan}
+      activity={activity}
+      onActivity={setActivity}
+      key={/* a new plan is a new slice, and the scrubber should not survive it */ activity}
+    />
+  );
+}
+
+/** The header and background, with nothing to draw in them yet. */
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={styles.safe}>
+      <SafeAreaView style={styles.fill} edges={["top"]}>
+        <View style={styles.scroll}>
+          <View style={styles.header}>
+            <Text style={styles.place}>{DEFAULT_LOCATION.name}</Text>
+          </View>
+          {children}
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+function Loaded({
+  plan,
+  activity,
+  onActivity,
+}: {
+  plan: PlanResult;
+  activity: ActivityKey;
+  onActivity: (key: ActivityKey) => void;
+}) {
+  const { width } = useWindowDimensions();
   const [span, setSpan] = useState<Span>("day");
   const [day, setDay] = useState<number | null>(null);
   const [scrubbed, setScrubbed] = useState<number | null>(null);
 
-  const plan = getPlan(activity);
   // Opens on the day the person is actually in, not on the first day of the forecast.
   const today = currentDayIndex(plan);
   const selectedDay = day ?? today;
@@ -92,7 +150,7 @@ export function TraceScreen() {
       <SafeAreaView style={styles.fill} edges={["top"]}>
         <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Text style={styles.place}>İstanbul</Text>
+          <Text style={styles.place}>{DEFAULT_LOCATION.name}</Text>
           <Text style={styles.age}>
             {plan.stale ? "bayat · " : ""}
             {formatAge(plan.fetched_at)}
@@ -119,7 +177,7 @@ export function TraceScreen() {
               key={key}
               label={ACTIVITY_LABELS[key]}
               active={key === activity}
-              onPress={() => setActivity(key)}
+              onPress={() => onActivity(key)}
             />
           ))}
         </View>
@@ -160,7 +218,7 @@ export function TraceScreen() {
               width={width}
               initialIndex={startAt}
               nowIndex={
-                selectedDay === today && plan.now_index !== null
+                selectedDay === today && plan.now_index != null
                   ? plan.now_index - today * 24
                   : null
               }
@@ -190,7 +248,7 @@ function Empty({
   blocker,
   activity,
 }: {
-  blocker: { constraint: string; hours: number } | null;
+  blocker: PlanResult["blocker"];
   activity: ActivityKey;
 }) {
   return (

@@ -116,3 +116,56 @@ need a measured figure for a mid-range Android, and an order in which things get
 No business logic. The client does not decide what a "good window for a bike ride" is;
 it renders what the service decided. This keeps the rules in one place, where they are
 tested, rather than duplicated in TypeScript where they would quietly diverge.
+
+## Talking to the service
+
+Wired up 2026-09-03, replacing the recorded fixtures both screens were built against.
+
+`/plan` is a query and `/ask` is a mutation, and the difference is not bookkeeping. The
+plan is a read of the same forecast the server already has cached, so it is retried,
+cached for ten minutes, and holds its previous result while a new activity is scored —
+switching a chip should feel like a filter, not a page load. The assistant is an event
+with a measured median of 27 seconds of local inference (docs/08), so it is **never**
+retried automatically: a silent second attempt turns a failed 47-second wait into a
+failed 94-second one, having asked the user's own machine to do the same expensive work
+twice. Nor is a 4xx or a schema mismatch, which are bugs on the client's side and will
+not improve on the second try.
+
+The timeouts come from the same measurement rather than from habit. A conventional
+30-second default would abort answers that were about to arrive; `/ask` is allowed 90
+seconds and `/plan`, which is arithmetic over a cached forecast, is allowed 15.
+
+**Responses are parsed, not cast.** Every response goes through the Zod schema generated
+from `packages/schema`, so a server that changes shape fails at the boundary with a
+description of what changed, rather than as `undefined` somewhere inside a worklet. This
+mattered immediately: until this was wired up the app declared its own hand-written copy
+of every response type, which is precisely the drift `packages/schema` exists to prevent,
+reintroduced one directory away. Two of those copies were already wrong — the assistant's
+`best_window` carries no `length_hours`, though the ranked windows in a plan do, and the
+app was typed to read a field the API never sends.
+
+### Error states, and why they arrive with the network
+
+The app had no failure path anywhere in the interface, for the simple reason that a
+fixture always answers. Connecting to a real service creates real failures, so F4 in
+docs/13 was not optional work that could be scheduled afterwards — it is part of the same
+change.
+
+Failures are named rather than counted: an unreachable server, a slow one, a forecast
+that could not be retrieved, a request the server rejected, and a contract that has
+drifted are five different sentences, and docs/10 requires each to explain what happened
+and offer a fix. The retry button appears only when pressing it could plausibly work;
+offering it on a schema mismatch would be a lie.
+
+## Still open
+
+- **One hard-coded location.** `Konumlar` is listed under Sen in docs/11 and unbuilt, so
+  the app asks about İstanbul and now at least *says* so on both screens — the smaller
+  half of F3. The larger half needs somewhere to store a place.
+- **The profile the app sends is a default, not a preference.** Three activity profiles
+  are constants in `lib/plan.ts` until the Sen screen can store what a person wants.
+- **Nothing is persisted.** History does not survive a launch, and neither does the
+  query cache; TanStack Query's persister and the Drizzle layer in docs/12 are both
+  unbuilt.
+- **No tests on the mobile side at all.** Types, lint and the shader check are the whole
+  safety net, and none of them would notice a screen rendering the wrong thing.

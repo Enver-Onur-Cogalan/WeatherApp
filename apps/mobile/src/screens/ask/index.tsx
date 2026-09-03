@@ -26,15 +26,17 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Failure } from "@/components/states";
+import { Thinking } from "@/components/thinking";
 import {
-  askAssistant,
   formatProvenance,
   SUGGESTIONS,
   VERDICT_LABELS,
   type Exchange,
 } from "@/lib/ask";
-import { Thinking } from "@/components/thinking";
+import { DEFAULT_LOCATION } from "@/lib/config";
 import { formatWindowDay, formatWindowSpan } from "@/lib/plan";
+import { useAsk } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
 
 export function AskScreen() {
@@ -42,8 +44,12 @@ export function AskScreen() {
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const scroller = useRef<ScrollView>(null);
+  const ask = useAsk("running");
 
-  const send = async (question: string) => {
+  const toEnd = () =>
+    requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
+
+  const send = (question: string) => {
     const asked = question.trim();
     if (!asked || pending) return;
 
@@ -51,15 +57,28 @@ export function AskScreen() {
     setPending(asked);
     // Scroll after the pending row mounts, so the wait is visible rather than
     // happening somewhere off screen.
-    requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
+    toEnd();
 
-    const response = await askAssistant(asked);
-    setExchanges((current) => [
-      ...current,
-      { id: `${Date.now()}`, question: asked, response },
-    ]);
+    ask.mutate(asked, {
+      onSuccess: (response) => {
+        setExchanges((current) => [
+          ...current,
+          { id: `${Date.now()}`, question: asked, response },
+        ]);
+        setPending(null);
+        toEnd();
+      },
+      // The question stays on screen above the failure, so it is obvious which one
+      // failed and the person can see what to retry.
+      onError: toEnd,
+    });
+  };
+
+  const retry = () => {
+    const asked = pending;
+    if (asked === null) return;
     setPending(null);
-    requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
+    send(asked);
   };
 
   const empty = exchanges.length === 0 && pending === null;
@@ -68,7 +87,7 @@ export function AskScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Sor</Text>
-        <Text style={styles.local}>yerel</Text>
+        <Text style={styles.local}>{DEFAULT_LOCATION.name} · yerel</Text>
       </View>
 
       <KeyboardAvoidingView
@@ -93,7 +112,11 @@ export function AskScreen() {
           {pending !== null ? (
             <View style={styles.turn}>
               <Question text={pending} />
-              <Thinking label="Cihazda düşünüyor" />
+              {ask.isError ? (
+                <Failure error={ask.error} onRetry={retry} />
+              ) : (
+                <Thinking label="Cihazda düşünüyor" />
+              )}
             </View>
           ) : null}
         </ScrollView>
@@ -113,8 +136,9 @@ function Empty({ onPick }: { onPick: (question: string) => void }) {
   return (
     <View style={styles.empty}>
       <Text style={styles.emptyLead}>
-        İz ekranının cevaplamadığı her şeyi buraya sorabilirsin. Model cihazda çalışıyor —
-        sorun hiçbir yere gitmiyor.
+        İz ekranının cevaplamadığı her şeyi buraya sorabilirsin. Cevaplar{" "}
+        {DEFAULT_LOCATION.name} için, model cihazda çalışıyor — sorun hiçbir yere
+        gitmiyor.
       </Text>
       <Text style={styles.emptyLabel}>Örnek sorular</Text>
       {SUGGESTIONS.map((question) => (

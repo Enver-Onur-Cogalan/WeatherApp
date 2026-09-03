@@ -6,10 +6,10 @@ export const PlanResult = z.object({
   latitude: z.number(),
   longitude: z.number(),
   timezone: z.string(),
-  fetched_at: z.string().datetime(),
+  fetched_at: z.string().datetime({ offset: true }),
   stale: z.boolean(),
   hours: z.array(z.object({
-  hour_utc: z.string().datetime(),
+  hour_utc: z.string().datetime({ offset: true }),
   local_hour: z.number().int().min(0).max(23),
   score: z.number().min(0).max(100),
   excluded: z.boolean(),

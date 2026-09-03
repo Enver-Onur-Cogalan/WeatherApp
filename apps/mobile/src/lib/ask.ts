@@ -1,34 +1,20 @@
 /**
- * Talking to the assistant.
+ * Wording the assistant's answer.
  *
- * Backed by recorded `/ask` responses for now, so the screen can be built and judged
- * without the backend reachable from a phone. The shape is the real one — every fixture
- * came out of the actual endpoint — so connecting later replaces one function and
- * nothing else.
+ * The request itself lives in `queries.ts` and the types come from `packages/schema`;
+ * what is left here is the part that is genuinely this app's — how a verdict, a
+ * provenance line and a failure are said to a person.
  *
- * The recorded latencies are kept and replayed. An assistant that answers instantly is
- * a different product to design for than one that takes twenty seconds, and the waiting
- * state is most of the screen's job.
+ * Suggestions are seeded rather than recorded. They used to be the questions the fixture
+ * happened to contain, which made the empty state a list of the only things that worked.
  */
 
-import fixture from "@/fixtures/ask.json";
-import type { Window } from "@/lib/plan";
+import type { AskResponse } from "@weatherapp/schema";
 
-export type Answer = {
-  verdict: "good" | "mixed" | "bad";
-  best_window: Window | null;
-  reason: string;
-  warnings: string[];
-};
+import { ApiError, type ErrorKind } from "@/lib/api";
 
-export type AskResponse = {
-  answer: Answer;
-  tool_calls: string[];
-  duration_ms: number;
-  from_model: boolean;
-  fallback_reason: string | null;
-  on_device: boolean;
-};
+export type { AskResponse };
+export type Answer = AskResponse["answer"];
 
 export type Exchange = {
   id: string;
@@ -36,43 +22,12 @@ export type Exchange = {
   response: AskResponse;
 };
 
-type Recorded = { question: string; response: AskResponse };
-
-const RECORDED = fixture as unknown as Recorded[];
-
-/** Questions to offer when the screen is empty, taken from what was recorded. */
-export const SUGGESTIONS = RECORDED.map((item) => item.question);
-
-/**
- * Answer a question.
- *
- * Matches a recorded question when it recognises one and otherwise returns the first,
- * which is honest about being a fixture rather than pretending to understand. The real
- * implementation is a POST to `/ask` with the same signature.
- */
-export async function askAssistant(question: string): Promise<AskResponse> {
-  const asked = question.trim().toLocaleLowerCase("tr");
-  const hit =
-    RECORDED.find((item) => item.question.toLocaleLowerCase("tr") === asked) ??
-    RECORDED.find((item) => overlaps(item.question, asked)) ??
-    RECORDED[0];
-
-  // Replayed, not instant. The wait is the part of this screen that needs designing.
-  await new Promise((resolve) => setTimeout(resolve, hit.response.duration_ms));
-  return hit.response;
-}
-
-/** Crude overlap so a rephrased question still finds its recorded answer. */
-function overlaps(recorded: string, asked: string): boolean {
-  const words = new Set(
-    recorded
-      .toLocaleLowerCase("tr")
-      .split(/\W+/)
-      .filter((word) => word.length > 3),
-  );
-  const shared = asked.split(/\W+/).filter((word) => words.has(word));
-  return shared.length >= 2;
-}
+/** Openers for the empty screen — the kinds of question İz cannot already answer. */
+export const SUGGESTIONS = [
+  "Bu hafta koşu için en iyi zaman ne zaman?",
+  "Yarın sabah koşabilir miyim?",
+  "Hafta sonu piknik yapmayı düşünüyoruz, ne dersin?",
+];
 
 export const VERDICT_LABELS: Record<Answer["verdict"], string> = {
   good: "Uygun",
@@ -89,4 +44,74 @@ export function formatProvenance(response: AskResponse): string {
       : `${response.tool_calls.length} araç`;
   const source = response.from_model ? "cihazda" : "motordan";
   return `${tools} · ${seconds} sn · ${source}`;
+}
+
+/**
+ * A failure, said in the interface's voice.
+ *
+ * docs/10: errors explain and offer a fix, with no apologies and no vagueness. Each of
+ * these names what happened and what would change it, because "bir hata oluştu" tells
+ * the person nothing they can act on.
+ *
+ * The assistant being down is deliberately not phrased as a failure of the app. It is
+ * reduced capability — the forecast and the windows still work — and the same table in
+ * docs/10 says to say so.
+ */
+const MESSAGES: Record<ErrorKind, { title: string; detail: string }> = {
+  unconfigured: {
+    title: "Sunucu adresi tanımlı değil",
+    detail:
+      "EXPO_PUBLIC_API_URL ayarlanmamış ve ödünç alınacak bir geliştirme sunucusu da yok.",
+  },
+  unreachable: {
+    title: "Sunucuya ulaşılamıyor",
+    detail:
+      "Backend çalışıyor mu ve telefon aynı ağda mı, kontrol et. Sonra tekrar dene.",
+  },
+  timeout: {
+    title: "Cevap zamanında gelmedi",
+    detail:
+      "Model cihazda çalışıyor ve yavaşlamış olabilir. Tekrar denemek çoğu zaman yeterli.",
+  },
+  forecast_unavailable: {
+    title: "Tahmin alınamadı",
+    detail:
+      "Sunucu hava tahminine ulaşamadı ve elinde önbelleğe alınmış bir kayıt yok. " +
+      "Birkaç dakika sonra tekrar dene.",
+  },
+  server: {
+    title: "Sunucu hata verdi",
+    detail: "Backend çalışıyor ama isteği tamamlayamadı. Sunucu günlüklerinde ayrıntısı var.",
+  },
+  request: {
+    title: "İstek kabul edilmedi",
+    detail: "Uygulama sunucunun beklemediği bir şey gönderdi. Bu bir uygulama hatası.",
+  },
+  contract: {
+    title: "Sunucunun cevabı beklenen biçimde değil",
+    detail:
+      "İstemci ve sunucu şemaları ayrışmış. packages/schema yeniden üretilmeli, " +
+      "iki taraf da güncellenmeli.",
+  },
+};
+
+const UNKNOWN = {
+  title: "Beklenmeyen bir sorun",
+  detail: "Ne olduğunu söyleyemiyoruz. Tekrar denemek bir sonuç vermezse günlüklere bak.",
+};
+
+export function describeError(error: unknown): { title: string; detail: string } {
+  if (error instanceof ApiError) return MESSAGES[error.kind];
+  return UNKNOWN;
+}
+
+/**
+ * Whether trying the same thing again could plausibly work.
+ *
+ * Offering "tekrar dene" on a schema mismatch would be a lie: nothing about pressing it
+ * changes the outcome.
+ */
+export function isWorthRetrying(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  return error.kind === "unreachable" || error.kind === "timeout" || error.kind === "server";
 }

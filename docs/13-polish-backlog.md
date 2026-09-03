@@ -98,7 +98,7 @@ rather than by choice.
 
 Copy, edit, delete. Icons alone are enough — no labels needed.
 
-### F3 — Say which place the answer is about
+### F3 — Say which place the answer is about — **half done 2026-09-03**
 **Where:** Sor, and arguably the answer itself.
 
 Nothing on the screen names the location. Someone in İzmir cannot tell whether the answer
@@ -109,13 +109,22 @@ Partly blocked: there is no location management yet — İz has "İstanbul" hard
 the Ask fixture is Rize. `Konumlar` is listed under Sen in docs/11 and unbuilt. The
 smaller half — showing the place on the answer card — can land first.
 
-### F4 — Error state
+**The smaller half landed with the API wiring.** Both screens now name the place, and it
+comes from one constant that the requests are built from, so the label cannot disagree
+with what was actually asked. The larger half still needs somewhere to store a place.
+
+### F4 — Error state — **done 2026-09-03**
 **Where:** Sor.
 
 There is no failure path in the UI at all, because the fixture always answers. Once it
 talks to `/ask` there are real ones: a 503 when the forecast cannot be retrieved, a
 network failure, a timeout. docs/11 already says what the tone should be — explain what
 happened and how to fix it, no apologies, no vagueness.
+
+**Done, and it could not have waited.** Connecting to a real service is what creates the
+failures, so this shipped in the same change rather than after it. Both screens share the
+states, five failure kinds are named separately, and the retry is only offered when it
+could plausibly help.
 
 ---
 

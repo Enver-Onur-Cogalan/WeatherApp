@@ -1,0 +1,117 @@
+{
+  "latitude": 41.0,
+  "longitude": 29.0,
+  "timezone": "Europe/Istanbul",
+  "fetched_at": "2026-09-02T23:57:48.256881+00:00",
+  "stale": false,
+  "hours": [
+    {
+      "hour_utc": "2026-09-02T21:00:00+00:00",
+      "local_hour": 0,
+      "score": 58.0,
+      "excluded": false,
+      "worst_penalty": "time_of_day",
+      "temperature_c": 22.1,
+      "precip_prob_pct": 0,
+      "wind_kmh": 8.7,
+      "uv_index": 0.0,
+      "cloud_cover_pct": 0,
+      "weather_code": 0
+    },
+    {
+      "hour_utc": "2026-09-02T22:00:00+00:00",
+      "local_hour": 1,
+      "score": 58.0,
+      "excluded": false,
+      "worst_penalty": "time_of_day",
+      "temperature_c": 21.8,
+      "precip_prob_pct": 0,
+      "wind_kmh": 7.9,
+      "uv_index": 0.0,
+      "cloud_cover_pct": 0,
+      "weather_code": 0
+    },
+    {
+      "hour_utc": "2026-09-02T23:00:00+00:00",
+      "local_hour": 2,
+      "score": 58.0,
+      "excluded": false,
+      "worst_penalty": "time_of_day",
+      "temperature_c": 21.5,
+      "precip_prob_pct": 0,
+      "wind_kmh": 7.6,
+      "uv_index": 0.0,
+      "cloud_cover_pct": 0,
+      "weather_code": 1
+    }
+  ],
+  "windows": [
+    {
+      "day": "2026-09-03",
+      "start_hour": 6,
+      "end_hour": 11,
+      "score": 96.8,
+      "length_hours": 6
+    },
+    {
+      "day": "2026-09-04",
+      "start_hour": 6,
+      "end_hour": 11,
+      "score": 96.8,
+      "length_hours": 6
+    },
+    {
+      "day": "2026-09-09",
+      "start_hour": 6,
+      "end_hour": 12,
+      "score": 96.5,
+      "length_hours": 7
+    },
+    {
+      "day": "2026-09-07",
+      "start_hour": 6,
+      "end_hour": 11,
+      "score": 96.1,
+      "length_hours": 6
+    },
+    {
+      "day": "2026-09-05",
+      "start_hour": 6,
+      "end_hour": 12,
+      "score": 95.8,
+      "length_hours": 7
+    },
+    {
+      "day": "2026-09-06",
+      "start_hour": 6,
+      "end_hour": 12,
+      "score": 95.5,
+      "length_hours": 7
+    },
+    {
+      "day": "2026-09-08",
+      "start_hour": 6,
+      "end_hour": 13,
+      "score": 95.5,
+      "length_hours": 8
+    }
+  ],
+  "blocker": null,
+  "days": [
+    {
+      "date": "2026-09-03",
+      "temp_min_c": 20.8,
+      "temp_max_c": 28.0,
+      "weather_code": 3,
+      "precip_prob_max_pct": 3
+    },
+    {
+      "date": "2026-09-04",
+      "temp_min_c": 21.7,
+      "temp_max_c": 27.8,
+      "weather_code": 3,
+      "precip_prob_max_pct": 3
+    }
+  ],
+  "now_index": 2
+}

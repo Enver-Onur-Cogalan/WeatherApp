@@ -5,7 +5,8 @@
   "type": "module",
   "main": "./generated/index.ts",
   "scripts": {
-    "generate": "node scripts/generate.mjs"
+    "generate": "node scripts/generate.mjs",
+    "check-contract": "node scripts/check-contract.mjs"
   },
   "dependencies": {
     "zod": "^3.24.0"
