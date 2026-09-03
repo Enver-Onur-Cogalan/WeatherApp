@@ -257,6 +257,50 @@ asks an assistant is more revealing than which profiles they keep. Capped at twe
 oldest evicted, in one statement rather than a count followed by a delete — the gap
 between two statements is where a concurrent insert makes the cap wrong.
 
+### Guest to account
+
+Built 2026-09-03. ADR-0009 calls this the fiddliest part of the feature and the one most
+likely to harbour bugs, which turned out to be fair.
+
+**It is offered, never automatic.** "Nothing is stored unless you ask us to" is the
+sentence that justifies guest mode existing, and uploading someone's profiles the instant
+they sign in is that sentence being quietly dropped. Declining is a real answer, so the
+offer waits in Sen rather than being a prompt that disappears.
+
+**The upload is an insert, not a remap**, because ids were generated on the device
+(ADR-0015). A profile keeps the identity it already had, there is no mapping table, and
+the id on the phone is the id on the server.
+
+**A row is claimed because it is on the server, not because a request returned a
+particular status.** Every pending profile is `PUT`, and then the account's list is
+fetched once and every id that appears is claimed locally.
+
+That indirection came out of measurement, not caution. Re-running an upload that already
+succeeded returns **409**: the record carries the same `updated_at` the server holds, and
+last-write-wins treats an equal timestamp as stale. The first version read that as failure
+and left the row pending forever — the offer would never clear, and pressing it would do
+nothing, repeatedly. The same misreading breaks when the app is killed between a
+successful `PUT` and the local claim. Asking the server what it holds is correct for both,
+costs fewer requests than asking per row, and distinguishes the *other* 409 — an id
+belonging to a different account — for free, since that id does not appear in this
+account's list.
+
+Three cases were run against the running service: killed between upload and claim (3
+moved, 0 failed), a complete re-run where every write returns 409 (3 moved, 0 failed), and
+an id already owned by another account (1 moved, 1 failed, and the other account
+untouched).
+
+**Merging by name is deliberately not done.** Two profiles called "Koşu" — one on the
+device, one already in the account — stay two profiles: they have different ids and
+different limits, and collapsing them would lose whichever the code happened to pick. This
+document asks for a merge to be *offered*; that needs a screen which does not exist yet,
+and duplicates a person can see and delete are a far smaller problem than an edit that
+vanished.
+
+**Claimed rows do not come back on sign-out.** They belong to the account now, and
+resurrecting them for whoever next uses the phone would be the wrong answer to a question
+about someone else's data.
+
 ### Migrations, and the two halves of getting them into the bundle
 
 `drizzle-kit generate` emits SQL plus a `migrations.js` that imports it, and both have to
@@ -290,8 +334,6 @@ one.
 - **The forecast cache is not on the device.** TanStack Query holds it for the life of a
   session, and the `ForecastHour` table in this document is unbuilt — so the app still
   needs a reachable server on every launch.
-- **Guest-to-account migration is unbuilt.** Now that a guest's profiles exist, the
-  upload ADR-0009 calls the fiddliest part of the feature finally has something to move.
 - **Retention on `ForecastHour`.** Rows accumulate; nothing prunes them yet. The device
   needs a ceiling, and the server needs to decide whether it keeps history at all.
 - **Historical comparison.** *"6° warmer than yesterday"* needs past observations, which is

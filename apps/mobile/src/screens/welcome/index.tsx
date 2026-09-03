@@ -23,7 +23,7 @@
  */
 
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -36,13 +36,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { moveProfilesToAccount, pendingProfiles } from "@/db/handoff";
 import { AuthError, useAuth } from "@/lib/auth";
 import { colors, radius, size, space, type } from "@/theme";
 
 /** docs/07: length is what matters, so the only rule is a floor, and it is stated. */
 const MIN_PASSWORD = 10;
 
-type Mode = "choose" | "in" | "up";
+type Mode = "choose" | "in" | "up" | "handoff";
 
 export function WelcomeScreen() {
   const chosenGuest = useAuth((state) => state.chosenGuest);
@@ -81,8 +82,19 @@ export function WelcomeScreen() {
 
             {mode === "choose" ? (
               <Choose onPick={setMode} dismissable={dismissable} onDismiss={leave} />
+            ) : mode === "handoff" ? (
+              <Handoff onDone={leave} />
             ) : (
-              <Credentials mode={mode} onBack={() => setMode("choose")} onDone={leave} />
+              <Credentials
+                mode={mode}
+                onBack={() => setMode("choose")}
+                // Signing in does not end the flow if this device is carrying profiles
+                // that belong to nobody. Uploading them without asking would contradict
+                // the sentence guest mode is justified by (ADR-0009), so it is a step.
+                onDone={async () =>
+                  (await pendingProfiles()).length > 0 ? setMode("handoff") : leave()
+                }
+              />
             )}
           </ScrollView>
         </KeyboardAvoidingView>
@@ -162,7 +174,7 @@ function Credentials({
 }: {
   mode: "in" | "up";
   onBack: () => void;
-  onDone: () => void;
+  onDone: () => void | Promise<void>;
 }) {
   const signIn = useAuth((state) => state.signIn);
   const signUp = useAuth((state) => state.signUp);
@@ -181,7 +193,7 @@ function Credentials({
     setFailure(null);
     try {
       await (mode === "in" ? signIn(email, password) : signUp(email, password));
-      onDone();
+      await onDone();
     } catch (error) {
       setFailure(describe(error, mode));
     } finally {
@@ -234,6 +246,74 @@ function Credentials({
 
       <Pressable onPress={onBack} style={styles.dismiss} accessibilityRole="button">
         <Text style={styles.dismissText}>Geri</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The offer: move what is on this phone into the account that was just opened.
+ *
+ * Shown only when there is something to move, and declining is a real answer — the same
+ * offer waits in Sen afterwards. "Nothing is stored unless you ask us to" is the position
+ * that justifies guest mode existing, and an upload that happens automatically the moment
+ * someone signs in is that position being quietly dropped.
+ */
+function Handoff({ onDone }: { onDone: () => void }) {
+  const account = useAuth((state) => state.account);
+  const [count, setCount] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ moved: number; failed: number } | null>(null);
+
+  useEffect(() => {
+    void pendingProfiles().then((profiles) => setCount(profiles.length));
+  }, []);
+
+  const move = async () => {
+    if (account === null) return;
+    setBusy(true);
+    setResult(await moveProfilesToAccount(account.id));
+    setBusy(false);
+  };
+
+  if (result !== null) {
+    return (
+      <View style={styles.stack}>
+        <Text style={styles.formTitle}>
+          {result.failed === 0 ? "Taşındı" : "Kısmen taşındı"}
+        </Text>
+        <Text style={styles.guestNote}>
+          {result.moved} profil hesabına kaydedildi.
+          {result.failed > 0
+            ? ` ${result.failed} tanesi gönderilemedi — cihazda duruyor, Sen sekmesinden tekrar deneyebilirsin.`
+            : ""}
+        </Text>
+        <Pressable onPress={onDone} style={styles.primary} accessibilityRole="button">
+          <Text style={styles.primaryText}>Devam et</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.stack}>
+      <Text style={styles.formTitle}>Bu cihazdaki profiller</Text>
+      <Text style={styles.guestNote}>
+        Misafirken {count ?? "…"} profil oluşturmuşsun. Hesabına taşıyalım mı? Taşırsan
+        başka cihazdan da açılır. Taşımazsan bu telefonda kalmaya devam eder.
+      </Text>
+
+      <Pressable
+        onPress={move}
+        disabled={busy || count === null}
+        style={[styles.primary, (busy || count === null) && styles.dim]}
+        accessibilityRole="button"
+      >
+        <Text style={styles.primaryText}>{busy ? "Taşınıyor…" : "Hesabıma taşı"}</Text>
+      </Pressable>
+
+      <Pressable onPress={onDone} style={styles.dismiss} accessibilityRole="button">
+        <Text style={styles.dismissText}>Şimdilik kalsın</Text>
       </Pressable>
     </View>
   );

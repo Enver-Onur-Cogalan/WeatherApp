@@ -206,9 +206,8 @@ person fight the control instead of expressing a limit.
 
 ## Still open
 
-- **Guest-to-account migration is unbuilt.** A guest's profiles now persist (docs/12), so
-  the upload ADR-0009 calls the fiddliest part of the feature finally has something to
-  move — but it does not happen yet, and signing up leaves local profiles where they are.
+- **Only profiles move.** Saved locations exist on the server and are not stored on the
+  device at all, so the handoff has nothing to carry for them yet (docs/12).
 - **One hard-coded location.** `Konumlar` is listed under Sen in docs/11 and unbuilt, so
   the app asks about İstanbul and now at least *says* so on both screens — the smaller
   half of F3. The larger half needs somewhere to store a place.

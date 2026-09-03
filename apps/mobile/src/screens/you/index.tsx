@@ -11,10 +11,11 @@
  */
 
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { moveProfilesToAccount, pendingProfiles } from "@/db/handoff";
 import { useAuth } from "@/lib/auth";
 import { Profiles } from "@/screens/you/profiles";
 import { colors, radius, size, space, type } from "@/theme";
@@ -36,7 +37,13 @@ export function YouScreen() {
             <ActivityIndicator color={colors.burnHi} size="small" />
           </View>
         ) : status === "signed-in" && account !== null ? (
-          <SignedIn email={account.email} />
+          <>
+            <SignedIn email={account.email} />
+            {/* The offer, if it was declined at sign-in or half of it failed. Declining
+                has to be a real answer, which means it cannot be a one-time prompt that
+                disappears — this is where it waits. */}
+            <Handoff userId={account.id} />
+          </>
         ) : (
           <Guest />
         )}
@@ -80,6 +87,41 @@ function SignedIn({ email }: { email: string }) {
         accessibilityRole="button"
       >
         <Text style={styles.actionText}>{busy ? "Çıkılıyor…" : "Çıkış yap"}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function Handoff({ userId }: { userId: string }) {
+  const [count, setCount] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = () => void pendingProfiles().then((rows) => setCount(rows.length));
+  useEffect(refresh, []);
+
+  if (count === 0) return null;
+
+  const move = async () => {
+    setBusy(true);
+    await moveProfilesToAccount(userId);
+    refresh();
+    setBusy(false);
+  };
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.label}>Taşınmamış profiller</Text>
+      <Text style={styles.note}>
+        Bu telefonda, hesabına bağlı olmayan {count} profil var. Taşırsan başka cihazdan
+        da açılır.
+      </Text>
+      <Pressable
+        onPress={move}
+        disabled={busy}
+        style={[styles.action, busy && styles.dim]}
+        accessibilityRole="button"
+      >
+        <Text style={styles.actionText}>{busy ? "Taşınıyor…" : "Hesabıma taşı"}</Text>
       </Pressable>
     </View>
   );
