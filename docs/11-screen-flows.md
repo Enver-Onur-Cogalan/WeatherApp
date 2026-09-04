@@ -221,6 +221,25 @@ because losing them is the one thing that would make signing up feel like a puni
 | Ask history local, capped | Full synced chat history | Consistent with the privacy stance, and avoids inheriting chat-app expectations |
 | Deep-linkable İz | Screen-local state | A notification must be able to open the exact hour it is about |
 
+## Pulling to refresh
+
+Added 2026-09-05. `RefreshControl` rather than a hand-rolled gesture: the guidance reserves
+hand-rolling for interactions that are a product's signature, and this one is a convention
+people already have.
+
+Two details are not defaults.
+
+The spinner takes the app's own accent and surface. The platform default is a light wheel
+on a light tray, which is a hole punched in a screen that commits to one dark world.
+
+And `refreshing` is its own state rather than the query's `isFetching`. A cached plan older
+than the stale time refetches by itself at launch (ADR-0016), and binding the control to
+that would spin the wheel at somebody who never pulled anything. The control reports *the
+gesture*.
+
+The offline banner keeps its button. Both earn their place: the pull is the habit, and the
+banner is what tells someone there is anything to refresh in the first place.
+
 ## The week is cards, not a longer day
 
 Changed 2026-09-05, and it is the third attempt.

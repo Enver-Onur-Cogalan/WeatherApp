@@ -15,12 +15,14 @@
 import { useMemo, useState } from "react";
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -88,7 +90,9 @@ export function TraceScreen() {
       choice={choice}
       onChoose={setChosen}
       offline={error !== null}
-      onRetry={() => void refetch()}
+      onRefresh={async () => {
+        await refetch();
+      }}
       key={/* a new plan is a new slice, and the scrubber should not survive it */ choice.key}
     />
   );
@@ -116,7 +120,7 @@ function Loaded({
   choice,
   onChoose,
   offline,
-  onRetry,
+  onRefresh,
 }: {
   plan: PlanResult;
   choices: Choice[];
@@ -124,13 +128,32 @@ function Loaded({
   onChoose: (key: string) => void;
   /** The server could not be reached and this trace came off the device. */
   offline: boolean;
-  onRetry: () => void;
+  onRefresh: () => Promise<void>;
 }) {
   const { width } = useWindowDimensions();
   const [span, setSpan] = useState<Span>("day");
   const [day, setDay] = useState<number | null>(null);
   const [scrubbed, setScrubbed] = useState<number | null>(null);
   const [scrollY, setScrollY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  /**
+   * Pull to refresh.
+   *
+   * `refreshing` is its own state rather than the query's `isFetching`. A cached plan
+   * older than the stale time refetches on its own at launch (ADR-0016), and binding the
+   * control to that would spin the wheel at someone who never pulled anything — the
+   * control should report *the gesture*, not every fetch.
+   */
+  const pull = async () => {
+    setRefreshing(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Opens on the day the person is actually in, not on the first day of the forecast.
   const today = currentDayIndex(plan);
@@ -176,6 +199,17 @@ function Loaded({
         >
         <ScrollView
           contentContainerStyle={styles.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={pull}
+              // The platform default is a light spinner on a light tray, which is a hole
+              // punched in a screen that commits to one dark world (docs/10).
+              tintColor={colors.burnHi}
+              colors={[colors.burnHi]}
+              progressBackgroundColor={colors.surface}
+            />
+          }
           scrollEventThrottle={64}
           onScroll={(event) => {
             const next = quantiseScroll(event.nativeEvent.contentOffset.y);
@@ -186,7 +220,10 @@ function Loaded({
           <Header place={DEFAULT_LOCATION.name} plan={plan} />
         </Legible>
 
-        {offline ? <Offline fetchedAt={plan.fetched_at} onRetry={onRetry} /> : null}
+        {/* The banner's button and the pull do the same thing. Both earn their place: the
+            pull is the habit, and the banner is what tells someone there is anything to
+            refresh in the first place. */}
+        {offline ? <Offline fetchedAt={plan.fetched_at} onRefresh={pull} /> : null}
 
         <Legible>
           <Now hour={now} today={plan.days[today] ?? null} />
@@ -321,13 +358,19 @@ function Verdict({ window, label }: { window: Window; label: string }) {
  * for. It is the same distinction docs/10 draws for the assistant being unreachable —
  * reduced capability, not a failure.
  */
-function Offline({ fetchedAt, onRetry }: { fetchedAt: string; onRetry: () => void }) {
+function Offline({
+  fetchedAt,
+  onRefresh,
+}: {
+  fetchedAt: string;
+  onRefresh: () => void;
+}) {
   return (
     <View style={styles.offline}>
       <Text style={styles.offlineText}>
         Sunucuya ulaşılamıyor. Bu iz {formatAge(fetchedAt)} alınan tahminden.
       </Text>
-      <Pressable onPress={onRetry} hitSlop={8} accessibilityRole="button">
+      <Pressable onPress={onRefresh} hitSlop={8} accessibilityRole="button">
         <Text style={styles.offlineAction}>Yenile</Text>
       </Pressable>
     </View>
