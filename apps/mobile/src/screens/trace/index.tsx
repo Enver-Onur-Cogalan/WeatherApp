@@ -21,14 +21,16 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Atmosphere } from "@/components/atmosphere";
+import { Calendar } from "@/components/calendar";
 import { Now } from "@/components/now";
 import { Legible, quantiseScroll, SkyProvider, useInk } from "@/components/legible";
 import { Failure, Loading } from "@/components/states";
 import { Trace } from "@/components/trace";
-import { Week } from "@/components/week";
+import { arrive } from "@/lib/motion";
 import {
   CONSTRAINT_LABELS,
   bestHourIndex,
@@ -209,13 +211,16 @@ function Loaded({
           ))}
         </View>
 
+        {/* One switch, two readings of the same plan. The trace answers "when today",
+            the calendar answers "which day" — different questions, so they get different
+            drawings rather than the same one at two zoom levels. */}
         <View style={styles.tabs}>
           <Tab label="24 saat" active={span === "day"} onPress={() => setSpan("day")} />
           <Tab label="7 gün" active={span === "week"} onPress={() => setSpan("week")} />
         </View>
 
         {span === "day" ? (
-          <View style={styles.dayView}>
+          <Animated.View key="trace" style={styles.dayView} entering={arrive()}>
             <View style={styles.dayStrip}>
               {days.map((label, index) => (
                 <Pressable
@@ -258,14 +263,18 @@ function Loaded({
               Çizgi ne kadar yüksekse o saat {choice.label.toLocaleLowerCase("tr")} için
               o kadar uygun. Kehribar bölümler sınırlarını geçen pencereler.
             </Text>
-          </View>
+          </Animated.View>
         ) : (
-          <View style={styles.weekView}>
-            <Week plan={plan} onSelectDay={showDay} />
+          // Keyed on the mode so the cards re-enter each time the switch is thrown; the
+          // stagger is most of what makes the change read as a change rather than a swap.
+          <Animated.View key="calendar" style={styles.weekView} entering={arrive()}>
+            <Calendar plan={plan} onSelectDay={showDay} />
             <Text style={styles.legend}>
-              Her satır bir gün, aynı 24 saatlik eksende. Bir güne dokun, o günün izini aç.
+              Her kart bir gün. Kehribar bantlar sınırlarını geçen saatler; hepsi aynı
+              00–24 ekseninde, böylece açık saatler haftada bir sütun olarak okunur. Bir
+              karta dokun, o günün izini aç.
             </Text>
-          </View>
+          </Animated.View>
         )}
         </ScrollView>
         </SkyProvider>

@@ -221,6 +221,30 @@ because losing them is the one thing that would make signing up feel like a puni
 | Ask history local, capped | Full synced chat history | Consistent with the privacy stance, and avoids inheriting chat-app expectations |
 | Deep-linkable İz | Screen-local state | A notification must be able to open the exact hour it is about |
 
+## The week is cards, not a longer day
+
+Changed 2026-09-05, and it is the third attempt.
+
+The first drew all 168 hours as one continuous trace. On a phone that is about two pixels
+an hour: technically the same information, practically a smear. The second was a compact
+grid — one row per day on a shared 24-hour axis — which was good at *"mornings are open
+all week"* and poor at *"what is Thursday like"*.
+
+Cards answer the second question. Each carries its own day: temperatures, condition,
+rain chance, its windows, and the best of them called out with a score. The shared axis
+survives **inside** the cards, which is what keeps the first question answerable — every
+card plots 00–24 across the same width, so open bands still line up as a column down the
+screen.
+
+A window's opacity carries its score, with a floor. A 95 should look more open than a 76,
+and a weak window still has to be visible rather than implied out of existence.
+
+The switch swaps the lower half of İz between the two readings. They answer different
+questions — *when today* and *which day* — so they get different drawings rather than the
+same drawing at two zoom levels, which is the same argument that killed the 168-hour
+trace. Cards arrive staggered 60ms apart: enough to read as one movement with depth,
+little enough that nobody waits for a list already on screen.
+
 ## The gate
 
 Added 2026-09-03, replacing a sign-in form that lived inside Sen.

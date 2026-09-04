@@ -171,6 +171,124 @@ half4 main(float2 xy) {
  * a weaker one about a tenth of a second later, which is what a real strike does and
  * what the eye is actually looking for.
  */
+/**
+ * Wind, which had no drawing at all.
+ *
+ * It was a parameter rather than a phenomenon: `windKmh` slanted falling precipitation and
+ * did nothing else, so a clear gale looked exactly like a clear calm. That is the one gap
+ * where the atmosphere stopped being a reading of the forecast (ADR-0013) and became a
+ * reading of *some* of it.
+ *
+ * Drawn as gusts rather than as a steady stream. Air moving over a city is turbulent, and
+ * a constant flow reads as a screensaver; each streak has its own start, speed and life,
+ * and the field is empty between them. They are long, thin and low in contrast because
+ * wind is a thing you infer from what it moves, and the alternative — visible lines
+ * hurtling across a weather app — is the exact decoration ADR-0013 rules out.
+ */
+const WIND = compileShader(
+  "wind",
+  `
+uniform float2 u_resolution;
+uniform float  u_time;
+uniform float  u_strength;   // 0..1, from km/h
+uniform float  u_fade;
+
+float hash(float n) { return fract(sin(n) * 43758.5453123); }
+
+half4 main(float2 xy) {
+    if (u_strength <= 0.01) { return half4(0.0); }
+
+    float2 uv = xy / u_resolution;
+    float fade = smoothstep(u_fade, u_fade * 0.45, xy.y / u_resolution.y);
+    if (fade <= 0.001) { return half4(0.0); }
+
+    float total = 0.0;
+    // Nine bands, each with its own height, phase and rate. Nine is enough to look
+    // unpatterned at a glance and few enough to stay cheap on a mid-range phone.
+    for (float i = 0.0; i < 9.0; i += 1.0) {
+        float seed = hash(i * 7.31);
+        float band = 0.06 + hash(i * 3.17) * 0.5;
+
+        // Faster air makes longer, quicker streaks — the length is the speed made visible.
+        float speed = (0.06 + seed * 0.10) * (0.35 + u_strength * 1.5);
+        float length = (0.10 + seed * 0.16) * (0.5 + u_strength);
+
+        // Each streak crosses, then the band waits before the next one. Without the gap
+        // this is a flowing river rather than weather.
+        float cycle = fract(u_time * speed + seed);
+        float head = cycle * 1.5 - 0.25;
+        float along = smoothstep(head - length, head, uv.x) * smoothstep(head, head - 0.012, uv.x);
+
+        float across = smoothstep(0.014, 0.0, abs(uv.y - band));
+        // Fade the streak in and out over its own crossing, so nothing pops at the edges.
+        float life = smoothstep(0.0, 0.15, cycle) * smoothstep(1.0, 0.85, cycle);
+
+        total += along * across * life;
+    }
+
+    float a = clamp(total, 0.0, 1.0) * fade * (0.08 + u_strength * 0.22);
+    return half4(half3(0.82, 0.87, 0.94) * a, a);
+}
+`,
+);
+
+/**
+ * Cloud, for the three states that had none.
+ *
+ * `clear`, `partly` and `overcast` only ever moved the gradient's colour, so a sky at 90%
+ * cover and a sky at 10% differed in tint and in nothing that moved. These are slow, soft
+ * masses at several depths — closer to how cloud actually reads from the ground than
+ * outlined shapes would be, and quiet enough to stay behind the trace.
+ *
+ * Deliberately not fog. Fog is low horizontal sheets at eye level; this is volume overhead,
+ * and drawing them the same way would make two different readings look identical.
+ */
+const CLOUDS = compileShader(
+  "clouds",
+  `
+uniform float2 u_resolution;
+uniform float  u_time;
+uniform float  u_cover;      // 0..1
+uniform float  u_drift;      // wind, as horizontal rate
+uniform float  u_fade;
+
+float hash(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453123); }
+
+float noise(float2 p) {
+    float2 i = floor(p);
+    float2 f = fract(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + float2(1.0, 0.0)), u.x),
+               mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x), u.y);
+}
+
+half4 main(float2 xy) {
+    if (u_cover <= 0.02) { return half4(0.0); }
+
+    float2 uv = xy / u_resolution;
+    float fade = smoothstep(u_fade, u_fade * 0.3, xy.y / u_resolution.y);
+    if (fade <= 0.001) { return half4(0.0); }
+
+    // Three octaves at different rates: the near layer moves fastest, which is the only
+    // depth cue available without perspective.
+    float t = u_time * (0.004 + u_drift * 0.02);
+    float mass = noise(uv * float2(2.2, 4.5) + float2(t, 0.0)) * 0.55
+               + noise(uv * float2(4.5, 8.0) - float2(t * 1.7, 0.0)) * 0.30
+               + noise(uv * float2(9.0, 14.0) + float2(t * 2.6, 0.0)) * 0.15;
+
+    // Cover raises the threshold rather than the opacity, so more cloud means *more of
+    // the sky covered* rather than the same shapes painted harder.
+    float lit = smoothstep(0.62 - u_cover * 0.42, 0.92 - u_cover * 0.30, mass);
+
+    // Thinner toward the horizon: overhead is where a cloud presents its face.
+    float overhead = smoothstep(0.85, 0.1, uv.y);
+
+    float a = lit * overhead * fade * (0.10 + u_cover * 0.30);
+    return half4(half3(0.88, 0.91, 0.96) * a, a);
+}
+`,
+);
+
 const LIGHTNING = compileShader(
   "lightning",
   `
@@ -281,6 +399,31 @@ export function Atmosphere({
     u_fade: FADE_AT,
   }));
 
+  /**
+   * Wind as a 0..1 strength.
+   *
+   * Saturating at 45 km/h: above that it is a storm and the precipitation shader is
+   * already carrying the news, so a stronger gust field would only add noise on top of
+   * something already loud. Below about 8 it is not visible weather and draws nothing —
+   * a faint drift on a still day would be inventing a reading.
+   */
+  const gust = Math.max(0, Math.min(1, (windKmh - 8) / 37));
+
+  const windUniforms = useDerivedValue(() => ({
+    u_resolution: [size.width, size.height],
+    u_time: clock.get() / 1000,
+    u_strength: gust,
+    u_fade: FADE_AT,
+  }));
+
+  const cloudUniforms = useDerivedValue(() => ({
+    u_resolution: [size.width, size.height],
+    u_time: clock.get() / 1000,
+    u_cover: overcast,
+    u_drift: gust,
+    u_fade: FADE_AT,
+  }));
+
   const lightningUniforms = useDerivedValue(() => ({
     u_resolution: [size.width, size.height],
     u_time: clock.get() / 1000,
@@ -314,9 +457,26 @@ export function Atmosphere({
             </Rect>
           ) : null}
 
+          {/* Cloud before precipitation, so rain falls in front of the mass it comes
+              from rather than behind it. */}
+          {overcast > 0.02 ? (
+            <Rect x={0} y={0} width={size.width} height={size.height}>
+              <Shader source={CLOUDS} uniforms={cloudUniforms} />
+            </Rect>
+          ) : null}
+
           {intensity > 0 ? (
             <Rect x={0} y={0} width={size.width} height={size.height}>
               <Shader source={WEATHER} uniforms={weatherUniforms} />
+            </Rect>
+          ) : null}
+
+          {/* Wind is not a condition — it blows in every one of them, which is why this
+              is not inside the `MODE` switch. It was the one forecast field the layer
+              read and never drew. */}
+          {gust > 0.01 ? (
+            <Rect x={0} y={0} width={size.width} height={size.height}>
+              <Shader source={WIND} uniforms={windUniforms} />
             </Rect>
           ) : null}
 

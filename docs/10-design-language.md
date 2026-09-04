@@ -247,6 +247,32 @@ and the point that was worst is now 6.44.
 One colour deliberately does not move. Severe weather keeps its warning red at every hour
 — a warning that changes shade with the time of day stops being one.
 
+## The atmosphere covers the whole forecast now
+
+Two gaps closed on 2026-09-05, both of them places where the layer read a field and drew
+nothing — which is the one thing ADR-0013 says it must not do, since a partial reading
+looks exactly like a complete one.
+
+**Wind was a parameter, not a phenomenon.** `windKmh` slanted falling precipitation and did
+nothing else, so a clear gale looked exactly like a clear calm. It is drawn as gusts rather
+than as a stream: each streak has its own start, speed and life, with empty air between
+them, because air over a city is turbulent and a constant flow reads as a screensaver. Long,
+thin and low in contrast — wind is a thing you infer from what it moves, and visible lines
+hurtling across a weather app are the decoration the ADR rules out. It sits outside the
+condition switch, because wind blows in all of them.
+
+**`clear`, `partly` and `overcast` had no drawing.** They moved the gradient's tint and
+that was all, so 90% cover and 10% differed in colour and in nothing that moved. Cloud is
+now soft masses at three depths, the near one drifting fastest — the only depth cue
+available without perspective. Cover raises the *threshold* rather than the opacity, so
+more cloud means more of the sky covered rather than the same shapes painted harder.
+
+Deliberately not drawn like fog. Fog is low horizontal sheets at eye level; this is volume
+overhead, and drawing them the same way would make two different readings look identical.
+
+Both were rendered through CanvasKit and looked at before shipping. Compiling proves a
+shader runs and nothing about what it draws.
+
 ## Still open
 
 - Screen-by-screen navigation graph and transitions (planned as `docs/11-screen-flows.md`).
