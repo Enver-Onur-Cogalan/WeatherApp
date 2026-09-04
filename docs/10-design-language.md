@@ -210,6 +210,43 @@ Words are design material. The rules we hold to:
 | No windows found | *Rüzgâr limiti 15 km/h — tek başına 112 saati eledi.* — plus the fix |
 | Model returned nonsense | A templated answer built from the engine. Less fluent, still correct, and the user is not told anything went wrong |
 
+## Ink follows the light
+
+Added 2026-09-05, after a device session where labels were invisible around midday.
+
+Measured before it was designed. At 14:00 the atmosphere's gradient runs to
+`rgb(124,168,204)`, and the app's bone-white ink reaches a WCAG contrast of **2.05** on it
+— below the 3.0 that even large text is meant to clear. Across the band from roughly 10%
+to 58% of screen depth, *every* colour in the palette failed AA, primary text included.
+
+So the ink moves. When the sky behind a block is light, that block uses a dark set drawn
+from the same family — the primary is the night sky's own top colour, the accent is the
+scorch at the depth it has before it is lit. The app should read as the same instrument in
+daylight, not as a second design.
+
+**This is not a light theme arriving by the back door.** The rule above is that daylight
+arrives through the atmosphere layer rather than through a theme, and the instrument this
+design is named for is a *card*: light stock with a dark burn on it. Ink that follows the
+light is that idea finished rather than reversed. There is still no theme to choose and no
+switch to set.
+
+Each block asks about its own position rather than the screen taking one decision. The
+gradient runs dark at the top, light in the middle and back to the app's ground, so at
+midday the header and the trace legend want opposite inks at the same moment; one
+screen-wide answer is wrong for one of them by construction. Scroll offset is part of the
+question, because the sky is pinned to the screen while the content moves under it.
+
+**What it cannot fix, stated plainly.** There is a band around luminance 0.15–0.20 where
+neither ink clears 4.5 — the background sits halfway between them and the best either
+manages is about 4.2. No two-colour scheme fixes that. It is a narrow strip, it clears the
+3.0 bar for large text, and it is a long way from 2.05, but it is not AA for body text.
+
+Measured after: the worst case anywhere in the day is now **4.21**, against 2.05 before,
+and the point that was worst is now 6.44.
+
+One colour deliberately does not move. Severe weather keeps its warning red at every hour
+— a warning that changes shade with the time of day stops being one.
+
 ## Still open
 
 - Screen-by-screen navigation graph and transitions (planned as `docs/11-screen-flows.md`).

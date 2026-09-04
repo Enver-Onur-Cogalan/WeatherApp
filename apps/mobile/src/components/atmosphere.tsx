@@ -29,6 +29,7 @@ import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useDerivedValue } from "react-native-reanimated";
 
 import { compileShader } from "@/lib/shader";
+import { css, elevation, FADE_AT, skyStops } from "@/lib/sky";
 import { conditionFor, type Condition } from "@/lib/weather-code";
 import { colors } from "@/theme";
 
@@ -213,9 +214,6 @@ half4 main(float2 xy) {
     return half4(half3(0.94, 0.96, 1.0) * a, a);
 }`)!;
 
-/** Fraction of height at which the sky has fully become the app's ground. */
-const FADE_AT = 0.62;
-
 const MODE: Partial<Record<Condition, number>> = {
   "light-rain": 0,
   downpour: 0,
@@ -224,35 +222,6 @@ const MODE: Partial<Record<Condition, number>> = {
   hail: 2,
   fog: 3,
 };
-
-type Rgb = [number, number, number];
-
-// Night is pulled away from the app's ground on purpose. The first version derived it
-// from the same corner of the palette, so the sky and the page underneath it were within
-// a few values of each other and the whole layer was invisible after sunset.
-const NIGHT_TOP: Rgb = [7, 10, 24];
-const NIGHT_LOW: Rgb = [30, 41, 74];
-const DAY_TOP: Rgb = [38, 92, 152];
-const DAY_LOW: Rgb = [124, 168, 204];
-const OVERCAST_TOP: Rgb = [40, 46, 62];
-const OVERCAST_LOW: Rgb = [78, 86, 100];
-const BURN: Rgb = [196, 104, 44];
-
-/**
- * Colour maths stays on tuples until the last step.
- *
- * Mixing a value that is already a css string back into another mix is how an earlier
- * version of this silently produced `NaN` and painted nothing.
- */
-const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
-  Math.round(a[0] + (b[0] - a[0]) * t),
-  Math.round(a[1] + (b[1] - a[1]) * t),
-  Math.round(a[2] + (b[2] - a[2]) * t),
-];
-const css = (c: Rgb) => `rgb(${c[0]},${c[1]},${c[2]})`;
-
-/** Zero at 06:30 and 19:30, peak at 13:00 — enough to move a gradient honestly. */
-const elevation = (hour: number) => Math.max(0, Math.sin(((hour - 6.5) / 13) * Math.PI));
 
 type Props = {
   /** The hour on screen — scrubbed, not current. */
@@ -276,19 +245,13 @@ export function Atmosphere({
   const sun = elevation(localHour);
   const overcast = cloudCoverPct / 100;
 
+  // The stops come from `lib/sky`, which is also what decides the ink drawn on top of
+  // them. Two implementations of this gradient would mean text adapting to a sky slightly
+  // different from the one painted, which is worse than text that does not adapt.
   const sky = useMemo(() => {
-    let top = mix(NIGHT_TOP, DAY_TOP, sun);
-    let low = mix(NIGHT_LOW, DAY_LOW, sun);
-    top = mix(top, OVERCAST_TOP, overcast * 0.7);
-    low = mix(low, OVERCAST_LOW, overcast * 0.6);
-
-    // A low sun brings the burn into the horizon band — where the palette came from
-    // in the first place (docs/10).
-    if (sun > 0 && sun < 0.34) {
-      low = mix(low, BURN, ((0.34 - sun) / 0.34) * 0.45 * (1 - overcast * 0.5));
-    }
-    return { top: css(top), low: css(low) };
-  }, [sun, overcast]);
+    const stops = skyStops(localHour, cloudCoverPct);
+    return { top: css(stops.top), low: css(stops.low) };
+  }, [localHour, cloudCoverPct]);
 
   const condition = conditionFor(weatherCode);
   const mode = MODE[condition];

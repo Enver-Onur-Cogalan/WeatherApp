@@ -25,6 +25,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Atmosphere } from "@/components/atmosphere";
 import { Now } from "@/components/now";
+import { Legible, quantiseScroll, SkyProvider, useInk } from "@/components/legible";
 import { Failure, Loading } from "@/components/states";
 import { Trace } from "@/components/trace";
 import { Week } from "@/components/week";
@@ -40,6 +41,7 @@ import {
   sliceFor,
   type PlanResult,
   type Span,
+  type Window,
 } from "@/lib/plan";
 import { DEFAULT_LOCATION } from "@/lib/config";
 import { useChoices, type Choice } from "@/lib/profiles";
@@ -126,6 +128,7 @@ function Loaded({
   const [span, setSpan] = useState<Span>("day");
   const [day, setDay] = useState<number | null>(null);
   const [scrubbed, setScrubbed] = useState<number | null>(null);
+  const [scrollY, setScrollY] = useState(0);
 
   // Opens on the day the person is actually in, not on the first day of the forecast.
   const today = currentDayIndex(plan);
@@ -162,30 +165,38 @@ function Loaded({
         cloudCoverPct={atmosphereHour.cloud_cover_pct}
       />
       <SafeAreaView style={styles.fill} edges={["top"]}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <Text style={styles.place}>{DEFAULT_LOCATION.name}</Text>
-          <Text style={styles.age}>
-            {plan.stale ? "bayat · " : ""}
-            {formatAge(plan.fetched_at)}
-          </Text>
-        </View>
+        <SkyProvider
+          value={{
+            localHour: atmosphereHour.local_hour,
+            cloudCoverPct: atmosphereHour.cloud_cover_pct,
+            scrollY,
+          }}
+        >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          scrollEventThrottle={64}
+          onScroll={(event) => {
+            const next = quantiseScroll(event.nativeEvent.contentOffset.y);
+            setScrollY((current) => (current === next ? current : next));
+          }}
+        >
+        <Legible style={styles.header}>
+          <Header place={DEFAULT_LOCATION.name} plan={plan} />
+        </Legible>
 
         {offline ? <Offline fetchedAt={plan.fetched_at} onRetry={onRetry} /> : null}
 
-        <Now hour={now} today={plan.days[today] ?? null} />
+        <Legible>
+          <Now hour={now} today={plan.days[today] ?? null} />
+        </Legible>
 
-        {best ? (
-          <View style={styles.verdict}>
-            <Text style={styles.day}>{formatWindowDay(best)}</Text>
-            <Text style={styles.span}>{formatWindowSpan(best)}</Text>
-            <Text style={styles.why}>
-              {choice.label} için haftanın en iyi penceresi.
-            </Text>
-          </View>
-        ) : (
-          <Empty blocker={plan.blocker} label={choice.label} />
-        )}
+        <Legible>
+          {best ? (
+            <Verdict window={best} label={choice.label} />
+          ) : (
+            <Empty blocker={plan.blocker} label={choice.label} />
+          )}
+        </Legible>
 
         <View style={styles.chips}>
           {choices.map((item) => (
@@ -257,7 +268,35 @@ function Loaded({
           </View>
         )}
         </ScrollView>
+        </SkyProvider>
       </SafeAreaView>
+    </View>
+  );
+}
+
+/** The place and how old the forecast is, in whatever ink the sky behind them wants. */
+function Header({ place, plan }: { place: string; plan: PlanResult }) {
+  const ink = useInk();
+  return (
+    <>
+      <Text style={[styles.place, { color: ink.ink }]}>{place}</Text>
+      <Text style={[styles.age, { color: ink.inkDim }]}>
+        {plan.stale ? "bayat · " : ""}
+        {formatAge(plan.fetched_at)}
+      </Text>
+    </>
+  );
+}
+
+function Verdict({ window, label }: { window: Window; label: string }) {
+  const ink = useInk();
+  return (
+    <View style={styles.verdict}>
+      <Text style={[styles.day, { color: ink.ink }]}>{formatWindowDay(window)}</Text>
+      <Text style={[styles.span, { color: ink.accent }]}>{formatWindowSpan(window)}</Text>
+      <Text style={[styles.why, { color: ink.ink2 }]}>
+        {label} için haftanın en iyi penceresi.
+      </Text>
     </View>
   );
 }
@@ -287,16 +326,21 @@ function Offline({ fetchedAt, onRetry }: { fetchedAt: string; onRetry: () => voi
 }
 
 function Empty({ blocker, label }: { blocker: PlanResult["blocker"]; label: string }) {
+  const ink = useInk();
   return (
     <View style={styles.verdict}>
-      <Text style={styles.emptyHead}>Bu hafta hiçbir saat sınırlarını geçmiyor</Text>
+      <Text style={[styles.emptyHead, { color: ink.ink }]}>
+        Bu hafta hiçbir saat sınırlarını geçmiyor
+      </Text>
       {blocker ? (
-        <Text style={styles.why}>
+        <Text style={[styles.why, { color: ink.ink2 }]}>
           {CONSTRAINT_LABELS[blocker.constraint] ?? blocker.constraint} limitin tek başına{" "}
           {blocker.hours} saati eledi.
         </Text>
       ) : (
-        <Text style={styles.why}>{label} profilin için sonuç yok.</Text>
+        <Text style={[styles.why, { color: ink.ink2 }]}>
+          {label} profilin için sonuç yok.
+        </Text>
       )}
     </View>
   );

@@ -92,6 +92,16 @@ export function Trace({
   const plotWidth = Math.max(1, width - PLOT_INSET * 2);
   const step = slice.count > 1 ? plotWidth / (slice.count - 1) : plotWidth;
 
+  /**
+   * Where an hour sits, and the only place that is decided.
+   *
+   * It was three places — the geometry, the scrub marker and the now marker — and the now
+   * marker was the one that did not get the inset when it was introduced, so it pointed a
+   * whole inset to the left of the hour it named. One function is the fix for the class,
+   * not just for the instance.
+   */
+  const xAt = (i: number) => PLOT_INSET + i * step;
+
   const geometry = useMemo(
     () =>
       buildGeometry(slice, {
@@ -133,7 +143,7 @@ export function Trace({
       index.set(atX(e.x, step, count));
     });
 
-  const scrubX = PLOT_INSET + at * step;
+  const scrubX = xAt(at);
   const scrubY = plotBottom - (slice.scores[at] / 100) * (plotBottom - PAD_TOP);
 
   return (
@@ -183,7 +193,7 @@ export function Trace({
             {/* Where the day actually is, so the trace is oriented before it is read. */}
             {nowIndex != null ? (
               <Path
-                path={verticalPath(nowIndex * step, PAD_TOP, plotBottom)}
+                path={verticalPath(xAt(nowIndex), PAD_TOP, plotBottom)}
                 style="stroke"
                 strokeWidth={1}
                 color={colors.burn}
