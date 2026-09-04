@@ -33,6 +33,32 @@ import { colors, size, space, type } from "@/theme";
 const PLEX = require("@expo-google-fonts/ibm-plex-mono/500Medium/IBMPlexMono_500Medium.ttf");
 
 const PAD_TOP = 16;
+
+/**
+ * How far the first and last hour sit in from the screen edge.
+ *
+ * The trace used to be plotted edge to edge, which read well and was close to unusable at
+ * both ends. With 24 hours across a 390dp screen a step is about 17dp, and the outermost
+ * hours own only *half* a step each — so 00:00 was an 8dp target pressed against the
+ * bezel, inside the band where Android's back gesture and iOS's screen-edge pan live.
+ *
+ * Twenty-four rather than a round twenty, because that is Android's own system gesture
+ * inset: the first data point then sits exactly outside the band the platform reserves,
+ * instead of a few pixels inside it. With the clamp in the gesture below it also gives
+ * 00:00 a capture band from the very edge to 24 + half a step — about 31dp, three and a
+ * half times what it had. The two hardest hours to hit become the two easiest.
+ *
+ * During a drag the ends are effectively infinite targets, since anything past the last
+ * point holds there. The number matters for a cold tap, which is the case that was hard.
+ *
+ * The cost is 12% of the width and the full-bleed the design liked (docs/10). A spine you
+ * cannot touch at either end is worse than a spine with margins.
+ *
+ * Rejected on the way: a non-linear x mapping that would keep the bleed and widen the end
+ * bands. It buys reachability by making the time axis non-uniform, and a time series whose
+ * x-axis lies about time is a worse trade than a margin.
+ */
+const PLOT_INSET = 24;
 const AXIS_BAND = 26;
 const STROKE = 2.5;
 const AXIS_SIZE = 10;
@@ -63,10 +89,18 @@ export function Trace({
   const [at, setAt] = useState(start);
 
   const plotBottom = height - AXIS_BAND;
-  const step = slice.count > 1 ? width / (slice.count - 1) : width;
+  const plotWidth = Math.max(1, width - PLOT_INSET * 2);
+  const step = slice.count > 1 ? plotWidth / (slice.count - 1) : plotWidth;
 
   const geometry = useMemo(
-    () => buildGeometry(slice, { width, top: PAD_TOP, bottom: plotBottom, step }),
+    () =>
+      buildGeometry(slice, {
+        width,
+        inset: PLOT_INSET,
+        top: PAD_TOP,
+        bottom: plotBottom,
+        step,
+      }),
     [slice, width, plotBottom, step],
   );
 
@@ -91,15 +125,15 @@ export function Trace({
   const pan = Gesture.Pan()
     .minDistance(0)
     .onBegin((e) => {
-      index.set(Math.min(Math.max(e.x / step, 0), count - 1));
+      index.set(atX(e.x, step, count));
     })
     .onUpdate((e) => {
       // Nothing is scheduled back to the RN runtime here — the reaction above owns that,
       // and only when a whole hour has been crossed.
-      index.set(Math.min(Math.max(e.x / step, 0), count - 1));
+      index.set(atX(e.x, step, count));
     });
 
-  const scrubX = at * step;
+  const scrubX = PLOT_INSET + at * step;
   const scrubY = plotBottom - (slice.scores[at] / 100) * (plotBottom - PAD_TOP);
 
   return (
@@ -235,12 +269,28 @@ type Geometry = {
   grid: GridLine[];
 };
 
+/**
+ * Which hour a touch at `x` means.
+ *
+ * A worklet: this runs on the UI runtime inside the pan handler, and a function called
+ * from one without the directive throws at runtime on device while working fine in the
+ * debugger.
+ *
+ * The clamp is what makes the margins useful rather than dead. Everything left of the
+ * first point resolves to hour 0 and everything right of the last to hour 23, so dragging
+ * into the bezel holds at the end instead of doing nothing.
+ */
+function atX(x: number, step: number, count: number): number {
+  "worklet";
+  return Math.min(Math.max((x - PLOT_INSET) / step, 0), count - 1);
+}
+
 function buildGeometry(
   slice: TraceSlice,
-  plot: { width: number; top: number; bottom: number; step: number },
+  plot: { width: number; inset: number; top: number; bottom: number; step: number },
 ): Geometry {
   const y = (score: number) => plot.bottom - (score / 100) * (plot.bottom - plot.top);
-  const x = (i: number) => i * plot.step;
+  const x = (i: number) => plot.inset + i * plot.step;
 
   const line = Skia.Path.Make();
   slice.scores.forEach((score, i) => {
@@ -277,7 +327,8 @@ function buildGeometry(
       const px = x(i);
       return {
         x: px,
-        // Keep the last label inside the canvas instead of half off the edge.
+        // Keep the last label inside the canvas instead of half off the edge. The first
+        // one no longer needs a floor: the inset already holds it clear.
         labelX: Math.min(px + 4, plot.width - 18),
         label: `${String(hour).padStart(2, "0")}:00`,
         major: hour === 0,

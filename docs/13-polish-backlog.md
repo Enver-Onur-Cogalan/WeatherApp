@@ -159,6 +159,34 @@ could plausibly help.
 
 ---
 
+### P4 — 00:00 and 23:00 were nearly untouchable — **fixed 2026-09-05**
+**Where:** İz, the 24-hour trace.
+
+Found on a device. The trace was plotted edge to edge, which read well and was close to
+unusable at both ends.
+
+The arithmetic says why. Twenty-four hours across a 390dp screen is a step of about 17dp,
+and the two outermost hours own only *half* a step each — so 00:00 was an 8dp target
+pressed against the bezel, inside the band where Android's back gesture and iOS's
+screen-edge pan live. It was not a matter of taste; the target was smaller than a
+fingertip and in the worst possible place.
+
+The plot is inset 24dp at each end now. Twenty-four rather than a round twenty because it
+is Android's own system gesture inset, so the first data point sits exactly outside the
+band the platform reserves. With the gesture's clamp, 00:00 captures everything from the
+screen edge inward — a band of about 31dp, three and a half times what it had. During a
+drag the ends are effectively infinite targets, since anything past the last point holds
+there; the number matters for a cold tap, which was the case that was hard.
+
+It costs 12% of the width and the full-bleed the design liked. A spine you cannot touch at
+either end is worse than a spine with margins.
+
+Rejected on the way: a non-linear x mapping that would have kept the bleed and widened the
+end bands. It buys reachability by making the time axis non-uniform, and a time series
+whose x-axis lies about time is a worse trade than a margin.
+
+**The 7-day view is untouched** — a different idea for it is coming.
+
 ## Decisions
 
 These cannot be built until something is decided, and two of them argue with decisions

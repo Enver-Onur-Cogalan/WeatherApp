@@ -225,7 +225,9 @@ function Loaded({
               ))}
             </View>
 
-            {/* Full-bleed: the trace is the spine, so it runs edge to edge. */}
+            {/* Full width, with the plot inset 24dp at each end — see `PLOT_INSET` in
+                `trace.tsx`. The canvas still spans the screen; the first and last hours
+                no longer sit against the bezel where nothing could reach them. */}
             {/* Remounting per day and activity resets the scrubber to that slice's best
                 hour, which is what changing either was asking for. */}
             <Trace
