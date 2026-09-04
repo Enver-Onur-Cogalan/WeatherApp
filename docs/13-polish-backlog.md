@@ -63,13 +63,26 @@ There is an obvious source: the app already draws weather in Skia. Something dra
 the same vocabulary would make the wait feel like part of the product rather than a stall
 in it.
 
-**Built as the instrument itself.** A Campbell–Stokes recorder burns its trace into a
-printed card as the drum turns — the card is ruled before anything is written on it, and
-the scorch is laid by a moving point of focused light. That is precisely the state being
-shown: running, with nothing to report yet. One SkSL pass draws the ruling and the burn
-together, the head wraps so the loop has no restart, and reduced motion holds a still
-frame rather than stopping dead — the card stays half-burnt, which still reads as work in
-progress.
+**First built as the instrument itself**: a Campbell–Stokes recorder burning its trace
+into a ruled card, which is precisely the state being shown — running, with nothing to
+report yet.
+
+**Replaced 2026-09-05, because the week cards took that drawing.** Once the calendar drew
+recorder cards with real days on them, a loading state that looked the same stopped
+reading as *working* and started reading as *here is a day* — a lie held for
+twenty-seven seconds. A loading state must not resemble the content it is loading.
+
+It is the other thing an instrument produces now: a pressure chart. Contours over a field
+that keeps rewriting itself, which is what a forecast is — a surface being solved. Blue
+and quiet, with one amber contour stepping outward through the set so the eye has
+somewhere to sit during a wait that is otherwise uniform. Unmistakably meteorological
+without being a picture of weather, and nothing else in the app looks like it.
+
+One detail falls out of the maths rather than being drawn: contours crowd where the field
+is steep and spread where it is flat, exactly as isobars do. Nobody will read it that way,
+and it is why the picture looks right.
+
+Reduced motion holds a still frame rather than stopping dead.
 
 The wait now also shows its elapsed seconds, after five. The animation is deliberately
 indeterminate: the agent's two phases are not streamed to the client, so a progress bar

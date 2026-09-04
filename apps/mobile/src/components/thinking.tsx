@@ -27,69 +27,107 @@ import { compileShader } from "@/lib/shader";
 import { colors, size, space, type } from "@/theme";
 
 /**
- * The card and the burn in one shader.
+ * Isobars, reorganising.
  *
- * One pass rather than a tree of nodes, because everything here is a function of x, y
- * and time — a baseline with its hour ruling, and a scorch whose head travels along it
- * leaving a tail that cools behind. The head wraps, and the tail is short enough that
- * the wrap is seamless: the drum is turning, so there is no moment where it restarts.
+ * The wait used to draw a recorder card scorching itself. That was right until the week
+ * cards started drawing the same thing with real data — a loading state that looks like
+ * the content it is loading stops reading as "working" and starts reading as "here is a
+ * day", which is a lie for twenty-seven seconds.
+ *
+ * So this is the other thing an instrument produces: a pressure chart. Contours over a
+ * field that keeps rewriting itself, which is what a forecast *is* — a surface being
+ * solved. It is unmistakably meteorological without being a picture of weather, and
+ * nothing else in the app looks like it.
+ *
+ * One honest detail falls out of the maths rather than being added. Contours crowd where
+ * the field is steep and spread where it is flat, exactly as isobars do — so the tight
+ * bands really are the windy parts of an imaginary chart. Nobody will read it that way,
+ * and it is the reason the picture looks right.
  */
-const RECORDER = compileShader(
-  "recorder",
+const ISOBARS = compileShader(
+  "isobars",
   `
 uniform float2 u_resolution;
 uniform float  u_time;
 uniform float  u_motion;    // 0 holds a still frame under reduced motion
-uniform float3 u_burn;      // the scorch
-uniform float3 u_burnHi;    // its hottest point, at the head
-uniform float3 u_rule;      // the card's printed ruling
+uniform float3 u_line;      // the contours
+uniform float3 u_front;     // the one line that leads
+
+float hash(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453123); }
+
+/**
+ * Value noise with quintic interpolation.
+ *
+ * The cubic smoothstep the rest of this file uses is C1: its second derivative jumps at
+ * every cell boundary, which is invisible in a gradient and very visible in a contour —
+ * the first attempt produced speckle rather than lines because of it. Quintic is C2, and
+ * the level sets come out smooth.
+ */
+float noise(float2 p) {
+    float2 i = floor(p);
+    float2 f = fract(p);
+    float2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    return mix(mix(hash(i), hash(i + float2(1.0, 0.0)), u.x),
+               mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x), u.y);
+}
+
+/** Two octaves. A third adds detail finer than the contour spacing, which is speckle. */
+float field(float2 p, float t) {
+    float v = noise(p + float2(t * 0.055, t * 0.03)) * 0.72;
+    v += noise(p * 1.9 - float2(t * 0.08, t * 0.045)) * 0.28;
+    return v;
+}
 
 half4 main(float2 xy) {
-    float w = u_resolution.x;
-    float h = u_resolution.y;
-    if (w <= 0.0) { return half4(0.0); }
+    float2 uv = xy / u_resolution;
+    // Square the field's coordinates so features are not stretched by a wide, short card.
+    float aspect = u_resolution.x / u_resolution.y;
+    float2 p = float2(uv.x * aspect, uv.y) * 1.15;
 
-    float base = h * 0.58;
-    float fromBase = abs(xy.y - base);
+    float t = u_motion > 0.5 ? u_time : 9.0;
 
-    // The printed card, which exists before anything is burnt onto it.
-    float baseline = smoothstep(1.1, 0.0, fromBase);
-    float cell = w / 13.0;
-    float within = fract(xy.x / cell) * cell;
-    float toTick = min(within, cell - within);
-    float ticks = smoothstep(0.9, 0.0, toTick) * smoothstep(h * 0.13, h * 0.10, fromBase);
-    float card = max(baseline * 0.85, ticks * 0.55);
+    // A low-pressure centre the contours close around, drifting across. Without it the
+    // field is texture; with it the chart has a subject.
+    float2 eye = float2((0.5 + sin(t * 0.10) * 0.30) * aspect, 0.5 + cos(t * 0.07) * 0.18)
+               * 1.15;
+    float2 toEye = p - eye;
+    float pull = 1.0 / (1.0 + dot(toEye, toEye) * 5.0);
 
-    // The burning point. Held still rather than stopped when motion is reduced, so the
-    // state still reads as "working" without anything moving.
-    float head = u_motion > 0.5 ? fract(u_time * 0.26) : 0.62;
-    float x = xy.x / w;
+    float v = field(p, t) + pull * 0.85;
 
-    // Distance measured backwards from the head, wrapped, so the tail survives the seam.
-    float behind = fract(head - x + 1.0);
-    float along = smoothstep(0.34, 0.0, behind);
+    // Contours: the level sets of the field. The distance to the nearest one, measured in
+    // field units, so lines crowd where the surface is steep — which is what isobars do,
+    // and the reason the picture reads as a chart rather than as a pattern.
+    float bands = v * 7.0;
+    float d = abs(fract(bands) - 0.5);
+    float line = smoothstep(0.030, 0.004, d);
 
-    // The groove widens where the light has dwelt longest — at the head.
-    float thickness = h * (0.028 + 0.052 * along);
-    float across = exp(-pow(fromBase / thickness, 2.0));
-    float scorch = along * across;
+    // Close to the centre the rings crowd past what a pixel can resolve and break into
+    // dots. A real chart stops drawing them there too rather than printing a moiré, so
+    // the innermost few fade out and leave the eye clean.
+    line *= smoothstep(0.92, 0.62, pull);
 
-    // The focused point itself: hotter, rounder, and brief.
-    float toHead = min(behind, 1.0 - behind);
-    float hot = exp(-pow(toHead / 0.030, 2.0)) * exp(-pow(fromBase / (h * 0.085), 2.0));
+    // One contour reads brighter, stepping outward through the set — a front crossing the
+    // chart. It picks a *specific* ring rather than a phase: an earlier version offset the
+    // same fract() the contours come from, so once a cycle the highlight lined up with
+    // every line at once and the whole chart flashed amber. A ring index cannot do that.
+    float ring = floor(bands);
+    float sweep = mod(t * 0.5, 13.0) - 1.0;
+    float front = line * smoothstep(1.2, 0.0, abs(ring - sweep));
 
-    float burnA = clamp(scorch * 0.8 + hot * 0.95, 0.0, 1.0);
-    half3 burnRgb = mix(half3(u_burn), half3(u_burnHi), half(hot));
+    // Faded at the left and right so the chart sits inside the card rather than being cut
+    // by it. Vertically it is allowed to run to the edges: the strip is short, and fading
+    // both axes left a band floating in the middle.
+    float vignette = smoothstep(0.0, 0.10, uv.x) * smoothstep(1.0, 0.90, uv.x);
 
-    // Premultiplied, burn over card.
-    float outA = burnA + card * (1.0 - burnA);
-    half3 pre = burnRgb * half(burnA) + half3(u_rule) * half(card * (1.0 - burnA));
-    return half4(pre, half(outA));
+    half3 rgb = mix(half3(u_line), half3(u_front), half(front));
+    float a = (line * 0.55 + front * 0.45) * vignette;
+    return half4(rgb * half(a), half(a));
 }
 `,
 );
 
-const HEIGHT = 46;
+const HEIGHT = 84;
 
 /**
  * Hex to the 0..1 triples the shader wants, resolved once at module scope.
@@ -105,9 +143,8 @@ const rgb = (hex: string): [number, number, number] => [
   parseInt(hex.slice(5, 7), 16) / 255,
 ];
 
-const BURN = rgb(colors.burn);
-const BURN_HI = rgb(colors.burnHi);
-const RULE = rgb(colors.rule);
+const LINE = rgb(colors.rule);
+const FRONT = rgb(colors.burnHi);
 
 /** Below this the wait is short enough that a counter would be noise. */
 const COUNT_FROM_SECONDS = 5;
@@ -127,9 +164,8 @@ export function Thinking({ label }: Props) {
     u_resolution: [width, HEIGHT],
     u_time: clock.get() / 1000,
     u_motion: reduced ? 0 : 1,
-    u_burn: BURN,
-    u_burnHi: BURN_HI,
-    u_rule: RULE,
+    u_line: LINE,
+    u_front: FRONT,
   }));
 
   const onLayout = (event: LayoutChangeEvent) => {
@@ -143,7 +179,7 @@ export function Thinking({ label }: Props) {
         {width > 0 ? (
           <Canvas style={{ width, height: HEIGHT }}>
             <Fill>
-              <Shader source={RECORDER} uniforms={uniforms} />
+              <Shader source={ISOBARS} uniforms={uniforms} />
             </Fill>
           </Canvas>
         ) : null}

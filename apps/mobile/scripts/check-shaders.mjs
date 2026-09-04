@@ -43,6 +43,19 @@ for (const file of fs.readdirSync(components).filter((name) => name.endsWith(".t
 
   for (const [, name, sksl] of source.matchAll(DECLARATION)) {
     checked += 1;
+
+    // A backtick inside the source means the JavaScript template literal ended early,
+    // even though the shader itself still compiles — SkSL sees it inside a `//` comment
+    // and does not care. It happened, and this script cheerfully reported "ok" for a file
+    // that was no longer valid JavaScript. `tsc` catches it; this says which shader.
+    if (sksl.includes("`")) {
+      failed += 1;
+      console.error(
+        `FAIL  ${file} :: ${name}\n` +
+          "      a backtick in the shader source closes the template literal early\n",
+      );
+      continue;
+    }
     let message = "";
     const effect = CanvasKit.RuntimeEffect.Make(sksl, (error) => {
       message = error;
