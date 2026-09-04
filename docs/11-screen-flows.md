@@ -236,8 +236,19 @@ survives **inside** the cards, which is what keeps the first question answerable
 card plots 00–24 across the same width, so open bands still line up as a column down the
 screen.
 
-A window's opacity carries its score, with a floor. A 95 should look more open than a 76,
-and a weak window still has to be visible rather than implied out of existence.
+Each card carries the day hour by hour rather than as a plain band: twenty-four bars whose
+height is the comfort score, amber where the hour clears the profile and dim where it does
+not. It is the trace at week scale, which makes a card and the İz screen two sizes of one
+instrument rather than two unrelated pictures — and it shows *why* a window ends, not only
+where. A floor keeps a bad hour visible, because a bar of zero height reads as missing data
+and missing is different news from bad.
+
+Alongside it: a temperature bar drawn on the **week's** scale, so a short bar sitting high
+means a mild day and a long one low means a cold morning and a warm afternoon. A per-day
+scale would fill every card identically and compare nothing, which is the only reason to
+draw a range rather than print the two numbers again. Wind appears when it reaches 15 km/h,
+because it is the limit that closes windows most often and a gale without it looks like a
+still day. And the footer says how many hours are open — the number a planner scans for.
 
 The switch swaps the lower half of İz between the two readings. They answer different
 questions — *when today* and *which day* — so they get different drawings rather than the

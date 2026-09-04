@@ -203,31 +203,48 @@ half4 main(float2 xy) {
     if (fade <= 0.001) { return half4(0.0); }
 
     float total = 0.0;
-    // Nine bands, each with its own height, phase and rate. Nine is enough to look
-    // unpatterned at a glance and few enough to stay cheap on a mid-range phone.
-    for (float i = 0.0; i < 9.0; i += 1.0) {
-        float seed = hash(i * 7.31);
-        float band = 0.06 + hash(i * 3.17) * 0.5;
 
-        // Faster air makes longer, quicker streaks — the length is the speed made visible.
-        float speed = (0.06 + seed * 0.10) * (0.35 + u_strength * 1.5);
-        float length = (0.10 + seed * 0.16) * (0.5 + u_strength);
+    for (float i = 0.0; i < 16.0; i += 1.0) {
+        float seed  = hash(i * 7.31);
+        float phase = hash(i * 13.77 + 4.2);
+        float band  = 0.04 + hash(i * 3.17) * 0.66;
 
-        // Each streak crosses, then the band waits before the next one. Without the gap
-        // this is a flowing river rather than weather.
-        float cycle = fract(u_time * speed + seed);
-        float head = cycle * 1.5 - 0.25;
-        float along = smoothstep(head - length, head, uv.x) * smoothstep(head, head - 0.012, uv.x);
+        float speed = (0.05 + seed * 0.09) * (0.35 + u_strength * 1.6);
+        float len   = (0.14 + seed * 0.26) * (0.45 + u_strength);
 
-        float across = smoothstep(0.014, 0.0, abs(uv.y - band));
-        // Fade the streak in and out over its own crossing, so nothing pops at the edges.
-        float life = smoothstep(0.0, 0.15, cycle) * smoothstep(1.0, 0.85, cycle);
+        float cycle = fract(u_time * speed + phase);
+        float head  = cycle * 1.5 - 0.3;
 
-        total += along * across * life;
+        // Position along the streak: 0 at the leading edge, 1 at the tail.
+        float t = (head - uv.x) / len;
+        float within = smoothstep(0.0, 0.03, t) * smoothstep(1.0, 0.55, t);
+        if (within <= 0.0) { continue; }
+
+        // A gust is a wedge, not a bar. It is fullest just behind the leading edge and
+        // thins to nothing at the tail — the earlier version kept one thickness the whole
+        // way and read as a typed underscore.
+        float thick = (0.0016 + seed * 0.0022) * (0.30 + 0.70 * (1.0 - t)) * (0.7 + u_strength * 0.6);
+
+        // A slight sag along its length. Air does not travel in ruled lines, and the
+        // wobble is what stops sixteen parallel streaks looking like a grid.
+        float wobble = sin((uv.x + phase * 8.0) * 7.0 + phase * 6.28) * 0.010 * (1.0 - t)
+                     + sin((uv.x + seed * 5.0) * 17.0) * 0.003;
+
+        float dy = uv.y - (band + wobble);
+        // Gaussian rather than a smoothstep edge: a hard-sided line at this width aliases
+        // into a dotted row on any screen that is not exactly the size it was tuned on.
+        float across = exp(-(dy * dy) / (thick * thick));
+
+        // Brightest just behind the nose, fading back — the eye reads that as direction.
+        float weight = within * (0.35 + 0.65 * smoothstep(0.55, 0.06, t));
+
+        total += across * weight;
     }
 
-    float a = clamp(total, 0.0, 1.0) * fade * (0.08 + u_strength * 0.22);
-    return half4(half3(0.82, 0.87, 0.94) * a, a);
+    // Kept low on purpose. Wind is inferred from what it moves; streaks bright enough to
+    // read as objects are the decoration ADR-0013 rules out.
+    float a = clamp(total, 0.0, 1.0) * fade * (0.05 + u_strength * 0.16);
+    return half4(half3(0.84, 0.89, 0.96) * a, a);
 }
 `,
 );

@@ -253,7 +253,12 @@ Two gaps closed on 2026-09-05, both of them places where the layer read a field 
 nothing — which is the one thing ADR-0013 says it must not do, since a partial reading
 looks exactly like a complete one.
 
-**Wind was a parameter, not a phenomenon.** `windKmh` slanted falling precipitation and did
+**Wind was a parameter, not a phenomenon** — and the first drawing of it was wrong too.
+It kept one thickness along each streak and read as a row of typed underscores. A gust is a
+wedge: fullest just behind its leading edge, thinning to nothing at the tail, with a slight
+sag along its length because air does not travel in ruled lines. The cross-section is a
+gaussian rather than a hard edge, since a line this thin with hard sides aliases into a
+dotted row on any screen it was not tuned on. `windKmh` slanted falling precipitation and did
 nothing else, so a clear gale looked exactly like a clear calm. It is drawn as gusts rather
 than as a stream: each streak has its own start, speed and life, with empty air between
 them, because air over a city is turbulent and a constant flow reads as a screensaver. Long,

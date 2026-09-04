@@ -21,7 +21,13 @@ import Animated from "react-native-reanimated";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { arrive } from "@/lib/motion";
-import { formatWindowSpan, type DaySummary, type PlanResult, type Window } from "@/lib/plan";
+import {
+  formatWindowSpan,
+  type DaySummary,
+  type PlanResult,
+  type ScoredHour,
+  type Window,
+} from "@/lib/plan";
 import { conditionLabel, isSevere } from "@/lib/weather-code";
 import { colors, radius, size, space, type } from "@/theme";
 
@@ -50,6 +56,12 @@ type Day = {
   best: Window | null;
   summary: DaySummary;
   today: boolean;
+  /** The day's 24 scored hours, in order. Empty when the forecast does not reach it. */
+  hours: ScoredHour[];
+  /** How many hours clear the profile — the number a planner actually scans for. */
+  openHours: number;
+  /** The day's strongest wind, which is usually the reason a window closed. */
+  windMax: number;
 };
 
 /**
@@ -73,7 +85,15 @@ function groupByDay(plan: PlanResult): Day[] {
     const [year, month, day] = summary.date.split("-").map(Number);
     const when = new Date(Date.UTC(year, month - 1, day));
 
+    // The server returns hours in 24-hour blocks aligned with the days it reports, which
+    // is the same assumption the trace slices on. Grouping by timestamp here instead would
+    // be the client re-deriving a day boundary — the thing this function exists not to do.
+    const hours = plan.hours.slice(index * HOURS, (index + 1) * HOURS);
+
     return {
+      hours,
+      openHours: windows.reduce((n, w) => n + (w.end_hour - w.start_hour + 1), 0),
+      windMax: hours.reduce((top, hour) => Math.max(top, hour.wind_kmh), 0),
       date: summary.date,
       weekday: index === 0 ? "Bugün" : WEEKDAYS[when.getUTCDay()],
       dayLabel: `${day} ${MONTHS[month - 1]}`,
@@ -97,18 +117,33 @@ export function Calendar({
 }) {
   const days = groupByDay(plan);
 
+  // One temperature scale for the week, so the bars compare days rather than each
+  // redrawing itself full-width. A day-local scale would make every day look the same.
+  const range = {
+    min: Math.min(...days.map((d) => d.summary.temp_min_c)),
+    max: Math.max(...days.map((d) => d.summary.temp_max_c)),
+  };
+
   return (
     <View style={styles.stack}>
       {days.map((day, index) => (
         <Animated.View key={day.date} entering={arrive().delay(index * STAGGER_MS)}>
-          <DayCard day={day} onPress={() => onSelectDay(index)} />
+          <DayCard day={day} range={range} onPress={() => onSelectDay(index)} />
         </Animated.View>
       ))}
     </View>
   );
 }
 
-function DayCard({ day, onPress }: { day: Day; onPress: () => void }) {
+function DayCard({
+  day,
+  range,
+  onPress,
+}: {
+  day: Day;
+  range: { min: number; max: number };
+  onPress: () => void;
+}) {
   const severe = isSevere(day.summary.weather_code);
 
   return (
@@ -146,15 +181,23 @@ function DayCard({ day, onPress }: { day: Day; onPress: () => void }) {
         {day.summary.precip_prob_max_pct > 0 ? (
           <Text style={styles.rain}>%{day.summary.precip_prob_max_pct}</Text>
         ) : null}
+        {/* Wind earns its place: it is the limit that closes windows most often, and a
+            day with none looks identical to a gale without it. */}
+        {day.windMax >= 15 ? (
+          <Text style={styles.wind}>{Math.round(day.windMax)} km/sa</Text>
+        ) : null}
       </View>
 
-      <Windows windows={day.windows} />
+      <TempBar day={day} range={range} />
+
+      <Comb hours={day.hours} windows={day.windows} />
 
       <View style={styles.footer}>
         {day.best ? (
           <>
             <Text style={styles.bestLabel}>En iyi</Text>
             <Text style={styles.bestSpan}>{formatWindowSpan(day.best)}</Text>
+            <Text style={styles.openHours}>{day.openHours} saat uygun</Text>
             <Text style={styles.bestScore}>{Math.round(day.best.score)}</Text>
           </>
         ) : (
@@ -166,35 +209,70 @@ function DayCard({ day, onPress }: { day: Day; onPress: () => void }) {
 }
 
 /**
- * The day's open windows on a 24-hour track.
+ * The day's temperature, on the week's scale.
  *
- * The same axis in every card, so a band at 06:00 sits at the same x on Monday as on
- * Friday and the week is still readable as a column — the one thing the grid was good at.
+ * Every bar is drawn against the same minimum and maximum, so a short bar sitting high up
+ * means a mild day and a long one low down means a cold morning and a warm afternoon. A
+ * per-day scale would fill every card the same way and compare nothing, which is the whole
+ * reason to draw it rather than print two numbers a second time.
  */
-function Windows({ windows }: { windows: Window[] }) {
+function TempBar({ day, range }: { day: Day; range: { min: number; max: number } }) {
+  const span = Math.max(1, range.max - range.min);
+  const left = ((day.summary.temp_min_c - range.min) / span) * 100;
+  const width = ((day.summary.temp_max_c - day.summary.temp_min_c) / span) * 100;
+
+  return (
+    <View style={styles.tempTrack}>
+      <View style={[styles.tempFill, { left: `${left}%`, width: `${Math.max(width, 2)}%` }]} />
+    </View>
+  );
+}
+
+/**
+ * The day, hour by hour: the trace at week scale.
+ *
+ * Twenty-four bars whose height is the comfort score, amber where the hour clears the
+ * profile and dim where it does not. It replaces a plain band because it carries the same
+ * shape the İz screen draws — a card and the trace are then two sizes of one instrument
+ * rather than two unrelated pictures, and *why* a window ends is visible instead of merely
+ * where.
+ *
+ * Views rather than a canvas: twenty-four rectangles is not a curve, and seven small Skia
+ * surfaces on a scrolling screen would cost more than they are worth.
+ */
+function Comb({ hours, windows }: { hours: ScoredHour[]; windows: Window[] }) {
+  const open = new Set<number>();
+  for (const window of windows) {
+    for (let h = window.start_hour; h <= window.end_hour; h += 1) open.add(h);
+  }
+
   return (
     <View style={styles.track}>
-      {AXIS_MARKS.map((hour) => (
-        <View key={hour} style={[styles.tick, { left: `${(hour / HOURS) * 100}%` }]} />
-      ))}
+      <View style={styles.comb}>
+        {Array.from({ length: HOURS }, (_, hour) => {
+          const scored = hours[hour];
+          // A missing hour draws nothing rather than a zero: the forecast not reaching a
+          // day is a different statement from that day scoring badly.
+          const score = scored ? scored.score : null;
+          const lit = open.has(hour);
 
-      {windows.map((window) => (
-        <View
-          key={`${window.start_hour}-${window.end_hour}`}
-          style={[
-            styles.burn,
-            {
-              left: `${(window.start_hour / HOURS) * 100}%`,
-              // `end_hour` is inclusive, so the band covers the hour it names rather than
-              // stopping at its start.
-              width: `${((window.end_hour - window.start_hour + 1) / HOURS) * 100}%`,
-              // Score as opacity: a 95 window should look more open than a 76, and the
-              // floor keeps a weak one visible rather than implying it does not exist.
-              opacity: 0.35 + (window.score / 100) * 0.65,
-            },
-          ]}
-        />
-      ))}
+          return (
+            <View key={hour} style={styles.slot}>
+              {score === null ? null : (
+                <View
+                  style={[
+                    styles.bar,
+                    lit ? styles.barOpen : styles.barShut,
+                    // A floor so a bad hour is still a mark. A bar of zero height reads as
+                    // missing data, and missing and bad are not the same news.
+                    { height: `${Math.max(6, score)}%` },
+                  ]}
+                />
+              )}
+            </View>
+          );
+        })}
+      </View>
 
       {AXIS_MARKS.map((hour) => (
         <Text
@@ -208,7 +286,8 @@ function Windows({ windows }: { windows: Window[] }) {
   );
 }
 
-const TRACK_HEIGHT = 26;
+const TRACK_HEIGHT = 44;
+const COMB_HEIGHT = 30;
 
 const styles = StyleSheet.create({
   stack: { gap: space.sm, paddingHorizontal: space.lg },
@@ -235,6 +314,19 @@ const styles = StyleSheet.create({
   condition: { ...type.body, fontSize: size.caption, color: colors.ink2, flex: 1 },
   severe: { color: colors.ember },
   rain: { ...type.data, fontSize: 11, color: colors.glacial },
+  wind: { ...type.data, fontSize: 11, color: colors.inkDim },
+
+  tempTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.ruleSoft,
+  },
+  tempFill: {
+    position: "absolute",
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.glacial,
+  },
 
   track: {
     height: TRACK_HEIGHT,
@@ -242,20 +334,11 @@ const styles = StyleSheet.create({
     borderTopColor: colors.ruleSoft,
     paddingTop: space.xs,
   },
-  tick: {
-    position: "absolute",
-    top: space.xs,
-    width: StyleSheet.hairlineWidth,
-    height: 8,
-    backgroundColor: colors.rule,
-  },
-  burn: {
-    position: "absolute",
-    top: space.xs,
-    height: 8,
-    backgroundColor: colors.burn,
-    borderRadius: 1,
-  },
+  comb: { height: COMB_HEIGHT, flexDirection: "row", alignItems: "flex-end" },
+  slot: { flex: 1, height: "100%", justifyContent: "flex-end", paddingHorizontal: 0.5 },
+  bar: { width: "100%", borderRadius: 1 },
+  barOpen: { backgroundColor: colors.burn },
+  barShut: { backgroundColor: colors.rule },
   axisLabel: {
     position: "absolute",
     bottom: 0,
@@ -266,7 +349,8 @@ const styles = StyleSheet.create({
 
   footer: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
   bestLabel: { ...type.label, color: colors.inkDim },
-  bestSpan: { ...type.data, fontSize: size.caption, color: colors.burnHi, flex: 1 },
+  bestSpan: { ...type.data, fontSize: size.caption, color: colors.burnHi },
+  openHours: { ...type.body, fontSize: 11, color: colors.inkDim, flex: 1 },
   bestScore: { ...type.data, fontSize: size.caption, color: colors.ink2 },
   none: { ...type.body, fontSize: 12, color: colors.inkDim },
 });
