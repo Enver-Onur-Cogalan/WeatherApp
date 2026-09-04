@@ -36,12 +36,18 @@ prompt, so at the moment it was asked to write for a person it was still being t
 every figure must come from a tool result. It was doing as it was told. Phase two has
 its own prompt now (docs/08), and the gate is the backstop rather than the fix.
 
-### B2 — White flash when the keyboard opens
+### B2 — White flash when the keyboard opens — **fixed 2026-09-05**
 **Where:** Sor, composer.
 
 The area the keyboard occupies flashes white before the keyboard draws. The app commits
 to one dark visual world (docs/10), so a white frame is jarring rather than merely
 unstyled — likely a window background that was never set, beneath React's view tree.
+
+**That guess was right.** `app.json` had no `backgroundColor`, so the frame the keyboard
+uncovered was the platform default. It is the one place a colour literal lives outside
+`theme.ts` and cannot not be: the native window background is read before any JavaScript
+runs, so it cannot import anything. `theme.ts` carries a note that the two must stay
+equal.
 
 ---
 
@@ -70,33 +76,58 @@ indeterminate: the agent's two phases are not streamed to the client, so a progr
 would be fiction. docs/08 measured the median at 27 seconds, which is what made the
 default spinner wrong — that long, it reads as a hang.
 
-### P2 — The answer card appears abruptly
+### P2 — The answer card appears abruptly — **done 2026-09-05**
 **Where:** Sor.
 
 It cuts in. An entrance would place it, and the wait beforehand makes the arrival worth
 marking. Under 300ms, ease-out, and it goes away under reduced motion.
 
-### P3 — A delete animation
+**Done at 220ms.** The entrance is on the *turn* rather than the card, so a question and
+its answer arrive as one thing — which is what they are. Under reduced motion the opacity
+survives and the movement does not: the fade still says something arrived, and the
+translation is the part that causes trouble.
+
+### P3 — A delete animation — **done 2026-09-05**
 **Where:** Sor, once deleting exists (F1, F2).
 
 Removal without motion reads as a glitch. Pairs with the delete work rather than being
 separate.
 
+**140ms, faster than the arrival.** Waiting on something you have already decided to
+remove reads as lag rather than as polish.
+
 ---
 
 ## Features
 
-### F1 — Delete an exchange
+### F1 — Delete an exchange — **done 2026-09-05**
 **Where:** Sor.
 
 Nothing can currently be removed. Related: history does not survive a launch either
 (docs/11), so today everything disappears on restart, which is deletion by accident
 rather than by choice.
 
-### F2 — Long-press menu on a card
+**Both halves are done.** History persists (docs/12) and an exchange can be deleted
+deliberately.
+
+### F2 — Long-press menu on a card — **done 2026-09-05**
 **Where:** Sor.
 
 Copy, edit, delete. Icons alone are enough — no labels needed.
+
+**Copy and delete; edit is dropped.** Editing an exchange would mean editing an answer the
+model produced, which is not a thing that can be true — the alternative, re-asking an
+edited question, is a new exchange and the composer already does it.
+
+**Drawn rather than native, and that is a compromise.** docs/02's rule is native where a
+component would only say the platform's name, and a context menu is exactly that. But
+`@expo/ui`'s menus are native views that do not exist in Expo Go, which is where this app
+currently runs — there is no development build. So it is the same in-place reveal the
+profile rows use. If a dev build ever lands, this is the first thing that should become
+native.
+
+Words rather than icons, against the note above: three actions, one of them destructive,
+and an icon-only destructive action in a custom-drawn menu asks a person to guess.
 
 ### F3 — Say which place the answer is about — **half done 2026-09-03**
 **Where:** Sor, and arguably the answer itself.
@@ -175,8 +206,10 @@ knows about weather?** Everything so far answers the first. D2 is the second.
 ## Still open
 
 - Nothing here is scheduled. The order is a separate decision from the list.
-- B1 and P1 are done. B1 did not wait for the pass, and the eval suite found its root
-  cause rather than just its symptom.
+- Everything except the two decisions is done. B1 and P1 landed early; the rest went in
+  one pass on 2026-09-05.
+- **D1 and D2 are still open, and both need a call rather than an implementation.** They
+  are the only items left in this document.
 - P1 turned up a latent defect of its own: a shader that fails to compile returns `null`,
   and `<Shader>` accepts null silently, so a typo draws nothing and reports nothing. All
   four shaders now go through `compileShader()`, which throws, and CI compiles them

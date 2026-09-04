@@ -6,7 +6,11 @@
  * commits to one visual world — an instrument reading a night sky. Daylight arrives
  * through the atmosphere layer, not through a light theme.
  *
- * Nothing outside this file should contain a colour literal.
+ * Nothing outside this file should contain a colour literal, with one unavoidable
+ * exception: `app.json`'s `backgroundColor` is the *native window* background, read before
+ * any JavaScript runs, so it cannot be imported from here. It must stay equal to
+ * `colors.ground` — when it was absent, the frame the keyboard uncovered was the
+ * platform's default white for one frame (B2 in docs/13).
  */
 
 import type { TextStyle } from "react-native";

@@ -24,9 +24,12 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { recordExchange, useExchanges } from "@/db/exchanges";
+import { forgetExchange, recordExchange, useExchanges } from "@/db/exchanges";
 import { Failure } from "@/components/states";
 import { Thinking } from "@/components/thinking";
 import {
@@ -38,6 +41,7 @@ import {
 import { DEFAULT_LOCATION } from "@/lib/config";
 import { formatWindowDay, formatWindowSpan } from "@/lib/plan";
 import { useChoices } from "@/lib/profiles";
+import { arrive, leave } from "@/lib/motion";
 import { useAsk } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
 
@@ -108,21 +112,28 @@ export function AskScreen() {
           {empty ? <Empty onPick={send} /> : null}
 
           {exchanges.map((exchange) => (
-            <View key={exchange.id} style={styles.turn}>
+            // `entering` and `exiting` on the turn rather than the card, so a question
+            // and its answer arrive and leave as one thing — which is what they are.
+            <Animated.View
+              key={exchange.id}
+              style={styles.turn}
+              entering={arrive()}
+              exiting={leave()}
+            >
               <Question text={exchange.question} />
               <AnswerCard exchange={exchange} />
-            </View>
+            </Animated.View>
           ))}
 
           {pending !== null ? (
-            <View style={styles.turn}>
+            <Animated.View style={styles.turn} entering={arrive()}>
               <Question text={pending} />
               {ask.isError ? (
                 <Failure error={ask.error} onRetry={retry} />
               ) : (
                 <Thinking label="Cihazda düşünüyor" />
               )}
-            </View>
+            </Animated.View>
           ) : null}
         </ScrollView>
 
@@ -168,13 +179,38 @@ function Question({ text }: { text: string }) {
   );
 }
 
+/**
+ * The answer, and what can be done with it.
+ *
+ * Long-press reveals copy and delete in place. docs/02's rule is native where a component
+ * would only say the platform's name, and a context menu is exactly that — but `@expo/ui`'s
+ * menus are native views that do not exist in Expo Go, which is where this app runs. So it
+ * is drawn, and the same in-place pattern the profile rows already use.
+ *
+ * The haptic fires on the long-press itself, not when the menu finishes appearing: a
+ * haptic that lags its cause reads as a glitch rather than as feedback. It is never the
+ * only signal either — the menu is the signal, and haptics are off system-wide for plenty
+ * of people.
+ */
 function AnswerCard({ exchange }: { exchange: Exchange }) {
   const { answer } = exchange.response;
   const window = answer.best_window;
+  const [open, setOpen] = useState(false);
+
+  const reveal = () => {
+    setOpen(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   return (
     <View>
-      <View style={styles.card}>
+      <Pressable
+        onLongPress={reveal}
+        delayLongPress={350}
+        style={styles.card}
+        accessibilityRole="button"
+        accessibilityHint="Uzun bas: kopyala veya sil"
+      >
         <Text style={styles.verdict}>{VERDICT_LABELS[answer.verdict]}</Text>
 
         {window ? (
@@ -195,7 +231,32 @@ function AnswerCard({ exchange }: { exchange: Exchange }) {
             ))}
           </View>
         ) : null}
-      </View>
+      </Pressable>
+
+      {open ? (
+        <Animated.View style={styles.actions} entering={arrive()} exiting={leave()}>
+          <Pressable
+            onPress={() => {
+              void Clipboard.setStringAsync(asText(exchange));
+              setOpen(false);
+            }}
+            hitSlop={6}
+            accessibilityRole="button"
+          >
+            <Text style={styles.actionQuiet}>Kopyala</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void forgetExchange(exchange.id)}
+            hitSlop={6}
+            accessibilityRole="button"
+          >
+            <Text style={styles.actionDestructive}>Sil</Text>
+          </Pressable>
+          <Pressable onPress={() => setOpen(false)} hitSlop={6} accessibilityRole="button">
+            <Text style={styles.actionQuiet}>Kapat</Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
 
       <Text style={styles.provenance}>{formatProvenance(exchange.response)}</Text>
 
@@ -250,7 +311,31 @@ function Composer({
   );
 }
 
+/** What lands on the clipboard: the question and the answer, not the card's chrome. */
+function asText(exchange: Exchange): string {
+  const { answer } = exchange.response;
+  const window = answer.best_window;
+  return [
+    exchange.question,
+    "",
+    window ? `${formatWindowDay(window)} ${formatWindowSpan(window)}` : null,
+    answer.reason,
+    ...answer.warnings,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+}
+
 const styles = StyleSheet.create({
+  actions: {
+    flexDirection: "row",
+    gap: space.lg,
+    paddingTop: space.sm,
+    paddingHorizontal: space.md,
+  },
+  actionQuiet: { ...type.label, color: colors.inkDim },
+  actionDestructive: { ...type.label, color: colors.ember },
+
   safe: { flex: 1, backgroundColor: colors.ground },
   fill: { flex: 1 },
 
