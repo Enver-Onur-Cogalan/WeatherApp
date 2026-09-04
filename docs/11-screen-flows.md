@@ -236,19 +236,32 @@ survives **inside** the cards, which is what keeps the first question answerable
 card plots 00–24 across the same width, so open bands still line up as a column down the
 screen.
 
-Each card carries the day hour by hour rather than as a plain band: twenty-four bars whose
-height is the comfort score, amber where the hour clears the profile and dim where it does
-not. It is the trace at week scale, which makes a card and the İz screen two sizes of one
-instrument rather than two unrelated pictures — and it shows *why* a window ends, not only
-where. A floor keeps a bad hour visible, because a bar of zero height reads as missing data
-and missing is different news from bad.
+Each card is a card **from the recorder**. A Campbell–Stokes instrument writes on ruled
+stock, scorched across by focused sunlight, and that is what a day is here: the faint line
+is the day's comfort curve, and the glowing burn on top of it is the part that clears the
+profile. The loading state already draws this card with nothing on it, so the wait, the
+trace and the week are now one object at three sizes.
 
-Alongside it: a temperature bar drawn on the **week's** scale, so a short bar sitting high
-means a mild day and a long one low means a cold morning and a warm afternoon. A per-day
-scale would fill every card identically and compare nothing, which is the only reason to
-draw a range rather than print the two numbers again. Wind appears when it reaches 15 km/h,
-because it is the limit that closes windows most often and a gale without it looks like a
-still day. And the footer says how many hours are open — the number a planner scans for.
+**The arrival is the signature.** Each card burns its own day in, left to right, staggered
+down the screen — the drum turning through a week. It is the one animation allowed to be
+noticed, because it happens once per visit rather than dozens of times a session, which is
+the tier reserved for delight. Reduced motion gets the finished card immediately: the
+scorch is the state, not the story.
+
+**Then most of it was taken out.** The first version carried eleven things — weekday, date,
+high, low, condition, a temperature bar, the burn, an hour axis, open hours, the best span,
+the score, the wind. Every one was defensible alone and the card was tiring to look at,
+which is the usual way a screen goes wrong: not one bad decision but eleven reasonable ones
+stacked.
+
+Five remain: the day, the temperatures, the burn, when it opens, and for how long. The
+graphic is the card's argument, so everything competing with it went. The temperature bar
+said what two numbers already said. The hour labels said what the span underneath says
+exactly. The condition, the score and the wind are one tap away on İz — a card answers
+*which day*, the trace answers *why*, and it does not have to be answered twice.
+
+The condition survives in the accessibility label, because dropping it visually is a
+density decision and a screen reader is not short of space.
 
 The switch swaps the lower half of İz between the two readings. They answer different
 questions — *when today* and *which day* — so they get different drawings rather than the
