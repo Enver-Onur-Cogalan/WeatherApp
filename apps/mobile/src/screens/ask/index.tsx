@@ -34,9 +34,11 @@ import { Failure } from "@/components/states";
 import { Thinking } from "@/components/thinking";
 import {
   formatProvenance,
+  readingsOf,
   SUGGESTIONS,
   VERDICT_LABELS,
   type Exchange,
+  type Reading,
 } from "@/lib/ask";
 import { DEFAULT_LOCATION } from "@/lib/config";
 import { formatWindowDay, formatWindowSpan } from "@/lib/plan";
@@ -214,10 +216,13 @@ function AnswerCard({ exchange }: { exchange: Exchange }) {
         <Text style={styles.verdict}>{VERDICT_LABELS[answer.verdict]}</Text>
 
         {window ? (
-          <View style={styles.window}>
-            <Text style={styles.windowDay}>{formatWindowDay(window)}</Text>
-            <Text style={styles.windowSpan}>{formatWindowSpan(window)}</Text>
-          </View>
+          <>
+            <View style={styles.window}>
+              <Text style={styles.windowDay}>{formatWindowDay(window)}</Text>
+              <Text style={styles.windowSpan}>{formatWindowSpan(window)}</Text>
+            </View>
+            <Readings readings={readingsOf(window)} />
+          </>
         ) : null}
 
         <Text style={styles.reason}>{answer.reason}</Text>
@@ -311,6 +316,35 @@ function Composer({
   );
 }
 
+/**
+ * The window's conditions, drawn as readings.
+ *
+ * Monospaced and labelled, like every other number in this app — the engine produced them,
+ * so they are shown the way the trace's readout shows its own (docs/10).
+ */
+function Readings({ readings }: { readings: Reading[] }) {
+  if (readings.length === 0) return null;
+
+  return (
+    <View style={styles.readings}>
+      {readings.map((reading) => (
+        <View key={reading.label} style={styles.reading}>
+          <Text style={styles.readingLabel}>{reading.label}</Text>
+          <Text
+            style={[
+              styles.readingValue,
+              reading.tone === "cool" && styles.readingCool,
+              reading.tone === "warn" && styles.readingWarn,
+            ]}
+          >
+            {reading.value}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /** What lands on the clipboard: the question and the answer, not the card's chrome. */
 function asText(exchange: Exchange): string {
   const { answer } = exchange.response;
@@ -327,6 +361,20 @@ function asText(exchange: Exchange): string {
 }
 
 const styles = StyleSheet.create({
+  readings: {
+    flexDirection: "row",
+    gap: space.lg,
+    paddingTop: space.xs,
+    paddingBottom: space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.ruleSoft,
+  },
+  reading: { gap: 1 },
+  readingLabel: { ...type.label, fontSize: 9, color: colors.inkDim },
+  readingValue: { ...type.data, fontSize: size.caption, color: colors.ink },
+  readingCool: { color: colors.glacial },
+  readingWarn: { color: colors.ember },
+
   actions: {
     flexDirection: "row",
     gap: space.lg,

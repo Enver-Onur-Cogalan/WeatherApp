@@ -1,16 +1,16 @@
 {
   "model": "gemma4:e4b",
-  "repeat": 3,
-  "generated_at": "2026-09-02T07:43:31.036750+00:00",
+  "repeat": 2,
+  "generated_at": "2026-09-04T23:33:28.850606+00:00",
   "summary": {
-    "runs": 30,
-    "passed": 30,
+    "runs": 20,
+    "passed": 20,
     "pass_rate": 1.0,
     "model_rate": 0.8,
     "unsafe": 0,
     "language_undetermined": 0,
     "unsafe_rate": 0.0,
-    "median_latency_ms": 27159
+    "median_latency_ms": 43346
   },
   "scenarios": [
     {
@@ -20,9 +20,8 @@
       "model_rate": 1.0,
       "failures": [],
       "answers": [
-        "Bu hafta koşu için en iyi zamanlar Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on arasında ve Cuma günü altı ile öğlene kadar.",
-        "Bu hafta koşu için en iyi zamanlar Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on arasında ve Cuma günü altı ile öğlene kadar.",
-        "Bu hafta koşu için en iyi zamanlar Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on arasında ve Cuma günü altı ile öğlene kadar."
+        "Perşembe günü altı ile öğlene kadar koşmak iyi olur; sıcaklık en az yirmi bir derece, en fazla yirmi yedi derece olacak, rüzgar en fazla dokuz ve yağış en fazla sekiz olacaktır.",
+        "Perşembe günü altı ile öğlene kadar koşmak iyi olur; sıcaklık en az yirmi bir derece, en fazla yirmi yedi derece olacak, rüzgar en fazla dokuz ve yağış en fazla sekiz olacaktır."
       ]
     },
     {
@@ -32,9 +31,8 @@
       "model_rate": 1.0,
       "failures": [],
       "answers": [
-        "Yarın, Çarşamba günü sabah saatlerinde hava sıcaklığı yirmi üç derece olacak ve yağış yüzdesi sıfır ile yüzde üç arasında değişecektir.",
-        "Yarın, Çarşamba günü sabah saatlerinde hava sıcaklığı yirmi üç derece olacak ve yağış yüzdesi sıfır ile yüzde üç arasında değişecektir.",
-        "Yarın, Çarşamba günü sabah saatlerinde hava sıcaklığı yirmi üç derece olacak ve yağış yüzdesi sıfır ile yüzde üç arasında değişecektir."
+        "Yarın, Çarşamba günü, sabah saatlerinde hava sıcaklığı 23 derece olacak, rüzgar 5 ile 6 arasında ve yağış yüzdesi sırasıyla %0 ve %3 olacaktır. Sabah saat 9'da sıcaklık 25 derece, rüzgar 2 ve yağış yüzdesi %0 olacaktır.",
+        "Yarın, Çarşamba günü, sabah saatlerinde hava sıcaklığı 23 derece olacak, rüzgar 5 ile 6 arasında ve yağış yüzdesi sırasıyla %0 ve %3 olacaktır. Sabah saat 9'da sıcaklık 25 derece, rüzgar 2 ve yağış yüzdesi %0 olacaktır."
       ]
     },
     {
@@ -44,9 +42,8 @@
       "model_rate": 1.0,
       "failures": [],
       "answers": [
-        "Cumartesi günü sabah altı ile öğleden sonra dört arasında ve Pazar günü sabah altı ile öğleden sonra beş arasında bir aktivite penceresi mevcut.",
-        "Cumartesi günü sabah altı ile öğleden sonra dört arasında ve Pazar günü sabah altı ile öğleden sonra beş arasında bir aktivite penceresi mevcut.",
-        "Cumartesi günü sabah altı ile öğleden sonra dört arasında ve Pazar günü sabah altı ile öğleden sonra beş arasında bir aktivite penceresi mevcut."
+        "Cumartesi günü sabah altı ile öğleden sonra dört arasında sıcaklık en az yirmi üç derece, en fazla yirmi altı derece olacak ve rüzgar en fazla altı olacak. Pazar günü sabah altı ile öğleden sonra beş arasında sıcaklık en az yirmi üç derece, en fazla yirmi altı derece olacak ve rüzgar en fazla dokuz olacak.",
+        "Cumartesi günü sabah altı ile öğleden sonra dört arasında sıcaklık en az yirmi üç derece, en fazla yirmi altı derece olacak ve rüzgar en fazla altı olacak. Pazar günü sabah altı ile öğleden sonra beş arasında sıcaklık en az yirmi üç derece, en fazla yirmi altı derece olacak ve rüzgar en fazla dokuz olacak."
       ]
     },
     {
@@ -56,9 +53,8 @@
       "model_rate": 1.0,
       "failures": [],
       "answers": [
-        "Cumartesi günü için bir bilgi verilmemiştir; ancak Salı günü sabah altı ile öğleden sonra dört arasında ve Çarşamba günü sabah altı ile öğleden sonra beş arasında bir zaman dilimi mevcuttur.",
-        "Cumartesi günü için bir bilgi verilmemiştir; ancak Salı günü sabah altı ile öğleden sonra dört arasında ve Çarşamba günü sabah altı ile öğleden sonra beş arasında bir zaman dilimi mevcuttur.",
-        "Cumartesi günü için bir bilgi verilmemiştir; ancak Salı günü sabah altı ile öğleden sonra dört arasında ve Çarşamba günü sabah altı ile öğleden sonra beş arasında bir zaman dilimi mevcuttur."
+        "Cumartesi günü sabah altı ile öğleden sonra dört arasında sıcaklık en az yirmi üç derece ve en fazla yirmi altı derece olacak, rüzgar en fazla altı olacak ve yağış en fazla on sekiz olacak. Pazar günü sabah altı ile öğleden sonra beş yedi arasında sıcaklık en az yirmi üç derece ve en fazla yirmi altı derece olacak, rüzgar en fazla dokuz olacak ve yağış en fazla üç olacak.",
+        "Cumartesi günü sabah altı ile öğleden sonra dört arasında sıcaklık en az yirmi üç derece ve en fazla yirmi altı derece olacak, rüzgar en fazla altı olacak ve yağış en fazla on sekiz olacak. Pazar günü sabah altı ile öğleden sonra beş yedi arasında sıcaklık en az yirmi üç derece ve en fazla yirmi altı derece olacak, rüzgar en fazla dokuz olacak ve yağış en fazla üç olacak."
       ]
     },
     {
@@ -68,9 +64,8 @@
       "model_rate": 1.0,
       "failures": [],
       "answers": [
-        "Thursday from six to twelve has a score of ninety-five, Tuesday from six to sixteen has a score of ninety-three, and Wednesday from six to seventeen has a score of ninety-one.",
-        "Thursday from six to twelve has a score of ninety-five, Tuesday from six to sixteen has a score of ninety-three, and Wednesday from six to seventeen has a score of ninety-one.",
-        "Thursday from six to twelve has a score of ninety-five, Tuesday from six to sixteen has a score of ninety-three, and Wednesday from six to seventeen has a score of ninety-one."
+        "The best time to run is on Thursday, August twenty-seventh, between six and twelve, with a temperature range of twenty-one to twenty-seven, a maximum wind of nine, and a maximum precipitation of eight. Another good option is on Tuesday, August twenty-fifth, between six and sixteen, with a temperature range of twenty-three to twenty-six, a maximum wind of six, and a maximum precipitation of eight.",
+        "The best time to run is on Thursday, August twenty-seventh, between six and twelve, with a temperature range of twenty-one to twenty-seven, a maximum wind of nine, and a maximum precipitation of eight. Another good option is on Tuesday, August twenty-fifth, between six and sixteen, with a temperature range of twenty-three to twenty-six, a maximum wind of six, and a maximum precipitation of eight."
       ]
     },
     {
@@ -80,9 +75,8 @@
       "model_rate": 1.0,
       "failures": [],
       "answers": [
-        "Tomorrow, Tuesday, you have an activity window from six to sixteen.",
-        "Tomorrow, Tuesday, you have an activity window from six to sixteen.",
-        "Tomorrow, Tuesday, you have an activity window from six to sixteen."
+        "On Wednesday, the temperature will be 23 at hour 0, 23 at hour 3, 23 at hour 6, 25 at hour 9, 26 at hour 12, 26 at hour 15, 25 at hour 18, and 22 at hour 21. The wind will be 5 at hour 0, 6 at hour 3, 6 at hour 6, 2 at hour 9, 8 at hour 12, 5 at hour 15, 3 at hour 18, and 6 at hour 21.",
+        "On Wednesday, the temperature will be 23 at hour 0, 23 at hour 3, 23 at hour 6, 25 at hour 9, 26 at hour 12, 26 at hour 15, 25 at hour 18, and 22 at hour 21. The wind will be 5 at hour 0, 6 at hour 3, 6 at hour 6, 2 at hour 9, 8 at hour 12, 5 at hour 15, 3 at hour 18, and 6 at hour 21."
       ]
     },
     {
@@ -92,9 +86,8 @@
       "model_rate": 1.0,
       "failures": [],
       "answers": [
-        "Bu hafta için, Salı günü sabah altı ile öğleden sonra dört arasında, Çarşamba günü sabah altı ile öğleden sonra beş arasında ve Cuma günü sabah altı ile öğlen on iki arasında bir zaman dilimi mevcut.",
-        "Bu hafta için, Salı günü sabah altı ile öğleden sonra dört arasında, Çarşamba günü sabah altı ile öğleden sonra beş arasında ve Cuma günü sabah altı ile öğlen on iki arasında bir zaman dilimi mevcut.",
-        "Bu hafta için, Salı günü sabah altı ile öğleden sonra dört arasında, Çarşamba günü sabah altı ile öğleden sonra beş arasında ve Cuma günü sabah altı ile öğlen on iki arasında bir zaman dilimi mevcut."
+        "Perşembe günü altıdan öğlene kadar sıcaklık en az yirmi bir, en fazla yirmi yedi derece olacak, rüzgar en fazla dokuz ve yağış en fazla sekiz olacaktır.",
+        "Perşembe günü altıdan öğlene kadar sıcaklık en az yirmi bir, en fazla yirmi yedi derece olacak, rüzgar en fazla dokuz ve yağış en fazla sekiz olacaktır."
       ]
     },
     {
@@ -104,9 +97,8 @@
       "model_rate": 0.0,
       "failures": [],
       "answers": [
-        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası.",
-        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası.",
-        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası."
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası. Sıcaklık 21–27°.",
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası. Sıcaklık 21–27°."
       ]
     },
     {
@@ -116,9 +108,8 @@
       "model_rate": 0.0,
       "failures": [],
       "answers": [
-        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası.",
-        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası.",
-        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası."
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası. Sıcaklık 21–27°.",
+        "En iyi pencere 2026-08-27 günü 06:00–12:00 arası. Sıcaklık 21–27°."
       ]
     },
     {
@@ -128,9 +119,8 @@
       "model_rate": 1.0,
       "failures": [],
       "answers": [
-        "Gelecek ay koşu için uygun zamanlar arasında Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on ve Cuma günü altı ile öğlene kadar zamanlar bulunmaktadır.",
-        "Gelecek ay koşu için uygun zamanlar arasında Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on ve Cuma günü altı ile öğlene kadar zamanlar bulunmaktadır.",
-        "Gelecek ay koşu için uygun zamanlar arasında Perşembe günü altı ile öğlene kadar, Salı günü altı ile on altı arasında, Çarşamba günü altı ile on yedi arasında, Pazar günü altı ile on ve Cuma günü altı ile öğlene kadar zamanlar bulunmaktadır."
+        "Koşu için en uygun günler: Perşembe günü sabah altı ile öğlen on iki arasında sıcaklık en az yirmi bir, en fazla yirmi yedi derece olacak, rüzgar en fazla dokuz, yağış en fazla sekiz ve UV en fazla yedi olacaktır. Salı günü sabah altı ile öğleden sonra dört arasında sıcaklık en az yirmi üç, en fazla yirmi altı derece olacak, rüzgar en fazla altı, yağış en fazla on sekiz ve UV en fazla iki civarınd",
+        "Koşu için en uygun günler: Perşembe günü sabah altı ile öğlen on iki arasında sıcaklık en az yirmi bir, en fazla yirmi yedi derece olacak, rüzgar en fazla dokuz, yağış en fazla sekiz ve UV en fazla yedi olacaktır. Salı günü sabah altı ile öğleden sonra dört arasında sıcaklık en az yirmi üç, en fazla yirmi altı derece olacak, rüzgar en fazla altı, yağış en fazla on sekiz ve UV en fazla iki civarınd"
       ]
     }
   ]

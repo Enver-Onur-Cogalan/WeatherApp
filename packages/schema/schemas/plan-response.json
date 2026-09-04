@@ -38,7 +38,12 @@
         "day": { "type": "string", "description": "Local date as YYYY-MM-DD.", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
         "start_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
         "end_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
-        "score": { "type": "number", "description": "Mean comfort score across the window, 0 to 100.", "minimum": 0, "maximum": 100 }
+        "score": { "type": "number", "description": "Mean comfort score across the window, 0 to 100.", "minimum": 0, "maximum": 100 },
+        "temp_min_c": { "type": ["number", "null"], "description": "Coldest hour in the window. Computed by the scoring engine and attached to the answer \u2014 the model never produces a figure a person reads (ADR-0007).", "minimum": -90, "maximum": 60 },
+        "temp_max_c": { "type": ["number", "null"], "description": "Warmest hour in the window.", "minimum": -90, "maximum": 60 },
+        "wind_max_kmh": { "type": ["number", "null"], "description": "Strongest wind in the window.", "minimum": 0, "maximum": 300 },
+        "precip_prob_max_pct": { "type": ["integer", "null"], "description": "Highest chance of precipitation across the window.", "minimum": 0, "maximum": 100 },
+        "weather_code": { "type": ["integer", "null"], "description": "The most severe WMO code in the window \u2014 what the interface names the conditions from.", "minimum": 0, "maximum": 99 }
       }
     }
   }

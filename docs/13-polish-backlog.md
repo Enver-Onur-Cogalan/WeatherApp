@@ -205,7 +205,7 @@ whose x-axis lies about time is a worse trade than a margin.
 These cannot be built until something is decided, and two of them argue with decisions
 already recorded. Recorded here as questions rather than resolved quietly.
 
-### D1 — Should the answer be formatted?
+### D1 — Should the answer be formatted? — **decided 2026-09-05: the client formats**
 
 Requested: bullet points, numbered lists, bold, possibly a small chart.
 
@@ -220,7 +220,38 @@ list, figures emphasised because the app knows which numbers came from the engin
 structure then comes from the schema rather than from the model's formatting, which is
 the same argument that took the window away from it.
 
-Needs a call before building.
+**Built as the middle path**, and the reasoning above held. `reason` stays a plain string,
+the model still fills judgement and prose only, and the structure comes from the schema:
+the window's temperature, wind and rain are computed by the scoring engine, attached to
+the answer, and rendered by the client as labelled readings. The same argument that took
+the window away from the model takes the formatting away from it — a temperature is a
+number with a unit, not a phrase to be parsed back out of a sentence.
+
+No markdown reaches the model. It was never going to be worth a new failure mode inside
+constrained decoding.
+
+### D3 — The answers did not sound like a weather assistant
+
+Noticed on a device, alongside D1, and the cause was not the prompt.
+
+A real answer read: *"Bu hafta koşu için uygun zamanlar; Pazartesi günü altı ile on bir
+arasında, Cumartesi günü altı ile öğle arasında…"* — a list of times with no weather in
+it. It reads like a scheduling assistant because that is exactly what it was.
+
+`get_activity_windows` returned `day`, `weekday`, `start_hour`, `end_hour` and `score`, and
+nothing else. **The model had never been given a temperature, a wind speed or a rain
+chance for any window it recommended.** The groundedness gate then kept it that way, doing
+its job perfectly: a figure the model was never given is a figure it cannot state. Two
+correct mechanisms combined into an answer that said nothing about the weather.
+
+The tool returns the conditions over each window now, computed by the engine from the same
+hours it scored. Measured immediately after, on the same question:
+
+> *"Cumartesi günü altı ile on bir arasında hava sıcaklığı yirmi bir ile yirmi yedi derece
+> arasında olacak, rüzgar en fazla sekiz ve yağış yok."*
+
+The engine's own fallback sentence says it too, for the same reason: someone who lands
+there should not be able to tell that the model failed, only that the prose is plainer.
 
 ### D2 — Drawer navigation with separate chat sessions
 

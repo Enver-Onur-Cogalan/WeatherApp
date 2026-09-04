@@ -168,6 +168,27 @@ A suite that reports correct output as a defect is how suites get switched off. 
 the same argument that made CI gate on unsafe runs rather than on the pass rate, applied
 to the suite's own instruments.
 
+### After the tools started returning conditions (2026-09-05)
+
+Re-run at 10 scenarios × 2 repeats, after `get_activity_windows` began returning the
+weather over each window and the composing prompt began asking for it.
+
+| | 2026-09-02 | 2026-09-05 |
+|---|---|---|
+| Runs passing every check | 30/30 (100%) | **20/20 (100%)** |
+| Answered by the model | 80% | **80%** |
+| Reached the user wrong | 0 | **0** |
+| Median latency | 27.2s | **43.3s** |
+
+Correctness held. Latency did not, and the number is reported rather than explained away.
+
+Two things could account for it and they have not been separated: the tool payload grew by
+five fields on each of five windows, and a bundle build was running on the same machine
+for part of the suite. **The 43.3s is therefore an upper bound, not a measurement of the
+change.** A clean re-run on an idle machine is owed before this figure is quoted anywhere,
+and until then the honest statement is that the answers got better and the wait may have
+got worse.
+
 ### Still open
 
 - **Quality is still not measured**, and the 100% should be read with that in the

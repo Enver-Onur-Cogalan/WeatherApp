@@ -17,11 +17,39 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from typing import Any
 
-from app.planning.daily import summarise_days
+from app.planning.daily import local_date, summarise_days
 from app.planning.models import ActivityProfile, ForecastHour
 from app.planning.scoring import dominant_blocker, plan
 
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def conditions_over(hours: list[ForecastHour], window: Any) -> dict[str, Any]:
+    """What the weather does across a window.
+
+    Computed here, from the same hours the engine scored, so the numbers a person ends up
+    reading came from arithmetic rather than from a 4B model's recollection (ADR-0007).
+
+    The window's hours are found by local hour on its own day rather than by slicing an
+    index range: `plan()` may be given a horizon that starts partway through a day, and an
+    offset of a few hours would silently describe the wrong weather.
+    """
+    inside = [
+        hour
+        for hour in hours
+        if local_date(hour) == window.day
+        and window.start_hour <= hour.local_hour <= window.end_hour
+    ]
+    if not inside:
+        return {}
+
+    return {
+        "temp_min": round(min(hour.temperature_c for hour in inside)),
+        "temp_max": round(max(hour.temperature_c for hour in inside)),
+        "wind_max": round(max(hour.wind_kmh for hour in inside)),
+        "precip_max": round(max(hour.precip_prob_pct for hour in inside)),
+        "uv_max": round(max(hour.uv_index for hour in inside)),
+    }
 
 
 def weekday_of(iso_date: str) -> str:
@@ -225,6 +253,13 @@ class ToolRunner:
                     "start_hour": window.start_hour,
                     "end_hour": window.end_hour,
                     "score": round(window.mean_score),
+                    # The conditions, without which this tool describes a calendar rather
+                    # than the weather. It returned only times and a score, so the model
+                    # had no temperature, wind or rain for any window it recommended — and
+                    # the answers read like a scheduling assistant because that is all it
+                    # had been told. The grounding gate then kept it that way: a figure it
+                    # was never given is a figure it cannot state.
+                    **conditions_over(horizon, window),
                 }
                 for window in ranked[:5]
             ],

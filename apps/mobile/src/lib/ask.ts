@@ -132,3 +132,54 @@ export function isWorthRetrying(error: unknown): boolean {
   if (!(error instanceof ApiError)) return true;
   return error.kind === "unreachable" || error.kind === "timeout" || error.kind === "server";
 }
+
+
+/**
+ * The window's conditions, as fields rather than as a sentence.
+ *
+ * D1 in docs/13 asked whether the assistant's answer should be formatted — bullets, bold,
+ * maybe a chart. The tension it named is real: `reason` is a plain string on purpose, and
+ * handing a 4B model markdown inside constrained decoding gives it a second thing to get
+ * wrong for no gain.
+ *
+ * So the structure comes from the schema instead. Every figure here was computed by the
+ * scoring engine and attached to the answer (ADR-0007), which means the client can render
+ * each one as what it is — a temperature with a unit, a chance with a percent — rather
+ * than parsing a phrase back out of prose the model wrote. The same argument that took the
+ * window away from the model takes the formatting away from it.
+ */
+export type Reading = { label: string; value: string; tone?: "warn" | "cool" };
+
+export function readingsOf(window: NonNullable<Answer["best_window"]>): Reading[] {
+  const readings: Reading[] = [];
+
+  if (window.temp_min_c != null && window.temp_max_c != null) {
+    const low = Math.round(window.temp_min_c);
+    const high = Math.round(window.temp_max_c);
+    readings.push({
+      label: "Sıcaklık",
+      value: low === high ? `${low}°` : `${low}–${high}°`,
+    });
+  }
+
+  if (window.wind_max_kmh != null) {
+    const speed = Math.round(window.wind_max_kmh);
+    readings.push({
+      label: "Rüzgâr",
+      value: `${speed} km/sa`,
+      // Cool rather than a warning: a stiff breeze is information, and the engine already
+      // refused to offer a window that broke the person's own limit.
+      tone: speed >= 25 ? "cool" : undefined,
+    });
+  }
+
+  if (window.precip_prob_max_pct != null) {
+    readings.push({
+      label: "Yağış",
+      value: window.precip_prob_max_pct === 0 ? "yok" : `%${window.precip_prob_max_pct}`,
+      tone: window.precip_prob_max_pct >= 40 ? "cool" : undefined,
+    });
+  }
+
+  return readings;
+}

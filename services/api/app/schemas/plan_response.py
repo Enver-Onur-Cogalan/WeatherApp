@@ -16,6 +16,30 @@ class Window(BaseModel):
     score: float = Field(
         ge=0, le=100, description="Mean comfort score across the window, 0 to 100."
     )
+    temp_min_c: float | None = Field(
+        default=None,
+        ge=-90,
+        le=60,
+        description="Coldest hour in the window. Computed by the scoring engine and attached to the answer — the model never produces a figure a person reads (ADR-0007).",
+    )
+    temp_max_c: float | None = Field(
+        default=None, ge=-90, le=60, description="Warmest hour in the window."
+    )
+    wind_max_kmh: float | None = Field(
+        default=None, ge=0, le=300, description="Strongest wind in the window."
+    )
+    precip_prob_max_pct: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Highest chance of precipitation across the window.",
+    )
+    weather_code: int | None = Field(
+        default=None,
+        ge=0,
+        le=99,
+        description="The most severe WMO code in the window — what the interface names the conditions from.",
+    )
 
 
 class PlanResponse(BaseModel):

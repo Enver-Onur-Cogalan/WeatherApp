@@ -32,6 +32,7 @@ from app.agent.tools import (
     ToolResult,
     ToolRunner,
     blocker_facts,
+    conditions_over,
     merge,
 )
 from app.agent.validation import (
@@ -92,7 +93,11 @@ COMPOSE_SYSTEM = (
     "The facts you were given are already true — state them, do not explain where they "
     "came from. Never mention tools, results, scores, fields or data sources: the "
     "reader knows none of those words and does not want them. Write plainly, in the "
-    "same language as the question, and invent no number."
+    "same language as the question, and invent no number.\n"
+    "Say what the weather will actually be like, not only when to go: the temperature, "
+    "the wind or the rain, whichever is the reason that time is the good one. An answer "
+    "that lists hours and describes no weather is not an answer to a question about the "
+    "weather. Use only figures you were given."
 )
 """Phase two's prompt, which for a while did not exist.
 
@@ -179,16 +184,7 @@ class PlanningAgent:
 
         # Ranked by the engine, before the model says anything about them.
         ranked, _ = plan(hours, profile)
-        window = (
-            ResponseWindow(
-                day=ranked[0].day,
-                start_hour=ranked[0].start_hour,
-                end_hour=ranked[0].end_hour,
-                score=round(ranked[0].mean_score, 1),
-            )
-            if ranked
-            else None
-        )
+        window = _window_of(hours, ranked[0]) if ranked else None
         codes = {hour.weather_code for hour in hours}
         dates = {local_date(hour) for hour in hours}
 
@@ -397,24 +393,12 @@ class PlanningAgent:
             )
 
         best = windows[0]
+        window = _window_of(hours, best)
         return AgentAnswer(
             response=PlanResponse(
                 verdict="good" if best.mean_score >= 85 else "mixed",
-                best_window=ResponseWindow(
-                    day=best.day,
-                    start_hour=best.start_hour,
-                    end_hour=best.end_hour,
-                    score=round(best.mean_score, 1),
-                ),
-                reason=(
-                    f"The best window is {best.day}, "
-                    f"{best.start_hour:02d}:00–{best.end_hour:02d}:00."
-                    if language == "en"
-                    else (
-                        f"En iyi pencere {best.day} günü "
-                        f"{best.start_hour:02d}:00–{best.end_hour:02d}:00 arası."
-                    )
-                ),
+                best_window=window,
+                reason=_engine_sentence(window, language),
                 warnings=[],
             ),
             tool_calls=tuple(called),
@@ -422,3 +406,73 @@ class PlanningAgent:
             fell_back=True,
             fallback_reason=reason,
         )
+
+
+def _window_of(hours: list[ForecastHour], window: Any) -> ResponseWindow:
+    """A ranked window, with what the weather does across it.
+
+    The conditions are attached here rather than left to the model, for the same reason the
+    window itself is (ADR-0007): every figure a person reads has to come from arithmetic
+    over the forecast. It also means the client can render them as fields — a temperature
+    is a number with a unit, not a phrase to be parsed out of a sentence.
+    """
+    facts = conditions_over(hours, window)
+    inside = [
+        hour
+        for hour in hours
+        if local_date(hour) == window.day
+        and window.start_hour <= hour.local_hour <= window.end_hour
+    ]
+
+    return ResponseWindow(
+        day=window.day,
+        start_hour=window.start_hour,
+        end_hour=window.end_hour,
+        score=round(window.mean_score, 1),
+        temp_min_c=facts.get("temp_min"),
+        temp_max_c=facts.get("temp_max"),
+        wind_max_kmh=facts.get("wind_max"),
+        precip_prob_max_pct=facts.get("precip_max"),
+        # The worst code wins. A window that is mostly clear with one hour of hail is a
+        # window with hail in it, and naming it "clear" would be the friendlier lie.
+        weather_code=max((hour.weather_code for hour in inside), default=None),
+    )
+
+
+def _engine_sentence(window: ResponseWindow, language: Language) -> str:
+    """The engine's own answer, in a sentence that mentions the weather.
+
+    It used to name a time and stop, which is a scheduling answer to a weather question.
+    The conditions are computed alongside the window now, so the fallback can say what it
+    will be like — and a person who lands here should not be able to tell that the model
+    was the one that failed, only that the prose is plainer.
+    """
+    span = f"{window.start_hour:02d}:00–{window.end_hour:02d}:00"
+    parts: list[str] = []
+
+    if window.temp_min_c is not None and window.temp_max_c is not None:
+        low, high = round(window.temp_min_c), round(window.temp_max_c)
+        degrees = f"{low}°" if low == high else f"{low}–{high}°"
+        parts.append(f"Temperature {degrees}" if language == "en" else f"Sıcaklık {degrees}")
+
+    if window.wind_max_kmh is not None and window.wind_max_kmh >= 10:
+        speed = round(window.wind_max_kmh)
+        parts.append(
+            f"wind up to {speed} km/h" if language == "en" else f"rüzgâr en fazla {speed} km/sa"
+        )
+
+    if window.precip_prob_max_pct is not None:
+        chance = window.precip_prob_max_pct
+        if chance >= 10:
+            parts.append(
+                f"{chance}% chance of rain" if language == "en" else f"yağış ihtimali %{chance}"
+            )
+        elif not parts:
+            parts.append("no rain" if language == "en" else "yağış yok")
+
+    opening = (
+        f"The best window is {window.day}, {span}."
+        if language == "en"
+        else f"En iyi pencere {window.day} günü {span} arası."
+    )
+    return opening if not parts else f"{opening} {', '.join(parts)}."
