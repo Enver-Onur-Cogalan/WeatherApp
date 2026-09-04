@@ -213,8 +213,5 @@ person fight the control instead of expressing a limit.
   half of F3. The larger half needs somewhere to store a place.
 - **The profile the app sends is a default, not a preference.** Three activity profiles
   are constants in `lib/plan.ts` until the Sen screen can store what a person wants.
-- **Nothing is persisted.** History does not survive a launch, and neither does the
-  query cache; TanStack Query's persister and the Drizzle layer in docs/12 are both
-  unbuilt.
 - **No tests on the mobile side at all.** Types, lint and the shader check are the whole
   safety net, and none of them would notice a screen rendering the wrong thing.

@@ -16,6 +16,10 @@
  *
  * **`ask_exchanges` exists only here and never syncs.** docs/12 caps it at twenty rows,
  * oldest evicted. It is not in `packages/schema` because it never crosses the wire.
+ *
+ * **There is no `ForecastHour` table**, though docs/12's entity list once named one. The
+ * device caches the *scored* plan instead, because it cannot score a raw forecast without
+ * a second copy of the engine — see ADR-0016.
  */
 
 import { sql } from "drizzle-orm";
@@ -77,4 +81,26 @@ export const askExchanges = sqliteTable(
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
   },
   (table) => [index("ix_ask_exchanges_created").on(table.createdAt)],
+);
+
+
+export const planCache = sqliteTable(
+  "plan_cache",
+  {
+    /** Location and limits together: the same question always hits the same row. */
+    key: text("key").primaryKey(),
+
+    /** Rounded `lat,lon` to two decimals — about a kilometre, so neighbours share
+     *  an entry (docs/12). Kept as its own column so a location can be evicted whole. */
+    locationKey: text("location_key").notNull(),
+
+    /** The `PlanResult` exactly as it arrived. Not picked apart: nothing queries inside
+     *  it, and re-deriving the shape here would be a second place for it to drift. */
+    payload: text("payload").notNull(),
+
+    /** When the server produced it, copied out of the payload so eviction can order by
+     *  it without parsing every row. */
+    fetchedAt: text("fetched_at").notNull(),
+  },
+  (table) => [index("ix_plan_cache_fetched").on(table.fetchedAt)],
 );

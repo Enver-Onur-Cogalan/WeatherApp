@@ -40,3 +40,4 @@ reversed — and why — is more valuable than a tidy folder.
 | [0013](./ADR-0013-data-driven-atmosphere.md) | Atmosphere as a second reading, not decoration | Accepted | 2026-08-25 |
 | [0014](./ADR-0014-planner-on-main-screen.md) | The planner's output is the main screen | Accepted | 2026-08-25 |
 | [0015](./ADR-0015-client-ids-and-sync.md) | Client-generated ids, server authority, last-write-wins | Accepted | 2026-08-25 |
+| [0016](./ADR-0016-cache-the-scored-plan.md) | The device caches the scored plan, not the raw forecast | Accepted | 2026-09-05 |

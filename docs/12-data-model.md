@@ -15,7 +15,7 @@ User ──┬── ActivityProfile   ──┐
        ├── NotificationRule   ─┘
        └── RefreshToken         server only
 
-ForecastHour        cache, both sides, never synced
+ForecastHour        cache, server only — see ADR-0016
 AskExchange         device only, never leaves it
 ```
 
@@ -63,8 +63,15 @@ The stored value keeps full precision; only the key is rounded.
 
 ### ForecastHour
 
-Normalised from Open-Meteo, stored identically on both sides, never synced — it is
-derived data and always re-fetchable.
+Normalised from Open-Meteo, never synced — it is derived data and always re-fetchable.
+
+> **Server only, as of [ADR-0016](./adr/ADR-0016-cache-the-scored-plan.md) (2026-09-05).**
+> This table was originally specified as living "identically on both sides". It does not
+> exist on the device, and cannot usefully: the trace draws a comfort score per hour, and
+> turning a `ForecastHour` into one is the scoring engine, which [ADR-0007](./adr/ADR-0007-deterministic-scoring-engine.md)
+> and doc 02 both keep off the client. A device copy would either be unusable or come with
+> a second implementation of the engine. The device caches the **scored `/plan` response**
+> instead.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -257,6 +264,35 @@ asks an assistant is more revealing than which profiles they keep. Capped at twe
 oldest evicted, in one statement rather than a count followed by a delete — the gap
 between two statements is where a concurrent insert makes the cap wrong.
 
+### The plan cache
+
+Built 2026-09-05, and it is what lets the app open with no server.
+
+What is cached is the **scored `/plan` response**, not raw forecast hours — the reasoning
+is [ADR-0016](./adr/ADR-0016-cache-the-scored-plan.md), and the short version is that the
+client cannot score without a second copy of the engine.
+
+Keyed by rounded location *and* by the profile's limits, because the same forecast scores
+differently for a runner and for a picnic. The location half rounds to two decimals, about
+a kilometre, the same way the server rounds for its own cache — so the two agree on what
+counts as the same place and a few metres of GPS drift does not miss the entry. The limits
+half lists fields in a fixed order rather than iterating the object, which would make the
+key depend on how the object happened to be built.
+
+It is handed to React Query as `initialData`, not `placeholderData`. This is real data the
+device has, and a placeholder is discarded on error — which is the one moment it is worth
+the most. `initialDataUpdatedAt` carries the response's own `fetched_at`, so an entry
+older than the ten-minute stale time refetches immediately rather than being trusted
+because it exists.
+
+When the server cannot be reached and there is an entry, İz draws it and says so, with the
+age on it. Not styled as an error: nothing is broken, and this is the thing the cache was
+kept for — the same distinction doc 10 draws for the assistant being unreachable, which is
+reduced capability rather than failure.
+
+Twelve entries, newest kept, pruned in one statement. At the measured 39 KB per response
+that is a ceiling of about 456 KB.
+
 ### Guest to account
 
 Built 2026-09-03. ADR-0009 calls this the fiddliest part of the feature and the one most
@@ -331,11 +367,9 @@ one.
 
 ## Still open
 
-- **The forecast cache is not on the device.** TanStack Query holds it for the life of a
-  session, and the `ForecastHour` table in this document is unbuilt — so the app still
-  needs a reachable server on every launch.
-- **Retention on `ForecastHour`.** Rows accumulate; nothing prunes them yet. The device
-  needs a ceiling, and the server needs to decide whether it keeps history at all.
+- **Retention on the server's `ForecastHour`.** Rows accumulate; nothing prunes them yet,
+  and the server needs to decide whether it keeps history at all. The device's own cache
+  has a ceiling of twelve entries — a guess, as ADR-0016 says, not a finding.
 - **Historical comparison.** *"6° warmer than yesterday"* needs past observations, which is
   a different Open-Meteo endpoint and a different table.
 - **Push token storage.** Device registration exists in the model above but the token

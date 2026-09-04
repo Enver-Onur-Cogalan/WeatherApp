@@ -57,9 +57,10 @@ export function TraceScreen() {
   const choice = choices.find((item) => item.key === chosen) ?? choices[0];
   const { data: plan, error, isPending, refetch } = usePlan(choice);
 
-  // Switching activity keeps the previous trace on screen while the new one is scored
-  // (`keepPreviousData`), so these two states are only ever the *first* load — which is
-  // the one where there is genuinely nothing to show.
+  // Three states, and the order matters. A device cache means `plan` can be present while
+  // `error` is set — the server is unreachable and the last answer to this exact question
+  // is on the phone (ADR-0016). That is the case worth getting right: the app opens and
+  // draws, rather than showing a failure it has the data to avoid.
   if (isPending) {
     return (
       <Shell>
@@ -68,7 +69,7 @@ export function TraceScreen() {
     );
   }
 
-  if (error) {
+  if (plan === undefined) {
     return (
       <Shell>
         <Failure error={error} onRetry={() => void refetch()} />
@@ -82,6 +83,8 @@ export function TraceScreen() {
       choices={choices}
       choice={choice}
       onChoose={setChosen}
+      offline={error !== null}
+      onRetry={() => void refetch()}
       key={/* a new plan is a new slice, and the scrubber should not survive it */ choice.key}
     />
   );
@@ -108,11 +111,16 @@ function Loaded({
   choices,
   choice,
   onChoose,
+  offline,
+  onRetry,
 }: {
   plan: PlanResult;
   choices: Choice[];
   choice: Choice;
   onChoose: (key: string) => void;
+  /** The server could not be reached and this trace came off the device. */
+  offline: boolean;
+  onRetry: () => void;
 }) {
   const { width } = useWindowDimensions();
   const [span, setSpan] = useState<Span>("day");
@@ -162,6 +170,8 @@ function Loaded({
             {formatAge(plan.fetched_at)}
           </Text>
         </View>
+
+        {offline ? <Offline fetchedAt={plan.fetched_at} onRetry={onRetry} /> : null}
 
         <Now hour={now} today={plan.days[today] ?? null} />
 
@@ -250,6 +260,30 @@ function Loaded({
   );
 }
 
+/**
+ * Drawn from the device, because the server could not be reached.
+ *
+ * Said plainly and with the time on it. docs/10: a forecast without a time on it is a
+ * lie, and this one is older than the header's staleness line implies — that number is
+ * about the forecast, this is about the connection.
+ *
+ * Not styled as an error. Nothing is broken; the app is doing the thing it kept a cache
+ * for. It is the same distinction docs/10 draws for the assistant being unreachable —
+ * reduced capability, not a failure.
+ */
+function Offline({ fetchedAt, onRetry }: { fetchedAt: string; onRetry: () => void }) {
+  return (
+    <View style={styles.offline}>
+      <Text style={styles.offlineText}>
+        Sunucuya ulaşılamıyor. Bu iz {formatAge(fetchedAt)} alınan tahminden.
+      </Text>
+      <Pressable onPress={onRetry} hitSlop={8} accessibilityRole="button">
+        <Text style={styles.offlineAction}>Yenile</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function Empty({ blocker, label }: { blocker: PlanResult["blocker"]; label: string }) {
   return (
     <View style={styles.verdict}>
@@ -311,6 +345,22 @@ function Chip({
 }
 
 const styles = StyleSheet.create({
+  offline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.rule,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.glacial,
+    marginBottom: space.md,
+  },
+  offlineText: { ...type.body, fontSize: 12, lineHeight: 17, color: colors.ink2, flex: 1 },
+  offlineAction: { ...type.label, color: colors.glacial },
+
   safe: { flex: 1, backgroundColor: colors.ground },
   // Transparent, so the atmosphere behind it shows through the upper part of the screen.
   fill: { flex: 1 },
