@@ -17,8 +17,14 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# This service's own .env if there is one, otherwise the repository root's — the file
+# `docker compose` reads. Two locations is not a mistake: each says which it is for. But
+# needing two copies of the same secret means sessions differ depending on how the service
+# was started, which is a confusing thing to debug and easy to avoid.
 if [ -f .env ]; then
   set -a; . ./.env; set +a
+elif [ -f ../../.env ]; then
+  set -a; . ../../.env; set +a
 fi
 
 if [ -z "${JWT_SECRET:-}" ]; then

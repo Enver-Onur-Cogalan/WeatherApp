@@ -1,7 +1,7 @@
 {
   "model": "gemma4:e4b",
   "repeat": 2,
-  "generated_at": "2026-09-04T23:33:28.850606+00:00",
+  "generated_at": "2026-09-05T03:23:41.075475+00:00",
   "summary": {
     "runs": 20,
     "passed": 20,
@@ -10,7 +10,7 @@
     "unsafe": 0,
     "language_undetermined": 0,
     "unsafe_rate": 0.0,
-    "median_latency_ms": 43346
+    "median_latency_ms": 39641
   },
   "scenarios": [
     {
