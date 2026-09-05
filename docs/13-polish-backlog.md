@@ -205,6 +205,29 @@ whose x-axis lies about time is a worse trade than a margin.
 
 **The 7-day view is untouched** — a different idea for it is coming.
 
+### P5 — Forty seconds with nothing happening — **done 2026-09-05**
+**Where:** Sor, while the assistant is thinking.
+
+P1 gave the wait a drawing. It still said one thing for the whole of it, and the whole of
+it is around forty seconds.
+
+The two halves are not equal, which is the finding that made this worth building. Measured
+on one question: **gathering the data took 28 seconds, composing the sentence took 6.**
+A single "thinking…" spends most of its time describing the wrong half.
+
+`/ask/stream` reports the phases the agent actually goes through, as newline-delimited
+JSON — no fraction, because the agent does not know one and a progress bar built from a
+guess is the fiction this document ruled out for D1's sibling problem. NDJSON rather than
+Server-Sent Events: SSE buys reconnection and event ids, neither of which applies to a
+single request that is worthless if resumed halfway.
+
+`repairing` is the interesting phase. It means a gate rejected the answer and the model is
+being asked again — a wait getting longer because the thing is being *checked*, not
+because it is stuck, and worth saying out loud.
+
+The plain `/ask` stays. The eval suite drives the agent directly and the endpoint is the
+simpler contract for anything that is not a phone.
+
 ## Decisions
 
 These cannot be built until something is decided, and two of them argue with decisions

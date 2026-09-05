@@ -204,6 +204,22 @@ Limits are edited with steppers, not sliders. These are integers with meaning �
 is a decision, and a slider that lands on 14 because of where a thumb stopped makes a
 person fight the control instead of expressing a limit.
 
+## Reading a streamed response
+
+`expo/fetch`, not the global one. React Native's `fetch` resolves `response.body` to null,
+so a streamed response can only be read once it has finished — which is exactly no better
+than not streaming. Expo ships the WHATWG implementation for this reason.
+
+It is deliberately not routed through `lib/api.ts`. That layer parses one JSON body against
+one schema and refreshes tokens around it; a stream of unrelated objects is a different
+shape, and bending one function to do both would make the common path carry the rare one's
+complexity.
+
+A chunk can end mid-line, so the trailing fragment is kept for the next read rather than
+parsed. Splitting on newlines and parsing everything would throw on half an object, and it
+would do so intermittently — the worst kind of bug to have in a code path that only runs
+when the network is slow.
+
 ## A config plugin that `expo install` does not add
 
 `npx expo install expo-location` installs the package and does **not** add its config

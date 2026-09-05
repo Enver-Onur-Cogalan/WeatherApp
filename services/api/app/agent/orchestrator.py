@@ -20,6 +20,7 @@ that something went wrong when we have a perfectly good answer.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -161,8 +162,20 @@ class PlanningAgent:
     _tools: list[dict[str, Any]] = field(default_factory=lambda: TOOLS)
 
     async def answer(
-        self, question: str, hours: list[ForecastHour], profile: ActivityProfile
+        self,
+        question: str,
+        hours: list[ForecastHour],
+        profile: ActivityProfile,
+        on_phase: Callable[[str], None] | None = None,
     ) -> AgentAnswer:
+        """Answer a question, optionally saying what it is doing while it does it.
+
+        `on_phase` exists because the wait is long enough to need explaining — a median of
+        forty seconds with nothing on screen. The phases reported are the ones that
+        actually happen; there is no progress fraction, because the agent does not know
+        one and inventing it would be the fiction docs/13 already ruled out.
+        """
+        say = on_phase or (lambda _phase: None)
         started = time.perf_counter()
         language = detect(question)
         runner = ToolRunner(hours, profile)
@@ -174,6 +187,10 @@ class PlanningAgent:
         def elapsed() -> int:
             return int((time.perf_counter() - started) * 1000)
 
+        # Said before the first tool call, not after: on this hardware gathering is the
+        # long half — measured at 28 seconds against 6 for composing — so a client that
+        # only hears about the second half watches nothing happen for most of the wait.
+        say("gathering")
         try:
             gathered = await self._gather(question, runner, facts, called)
         except ModelUnavailableError as exc:
@@ -197,9 +214,10 @@ class PlanningAgent:
                 hours, profile, elapsed(), "no tools were called", called, language
             )
 
+        say("composing")
         try:
             answer, rejection = await self._compose(
-                question, gathered, facts, codes, dates, window, elapsed, called
+                question, gathered, facts, codes, dates, window, elapsed, called, say
             )
         except ModelUnavailableError as exc:
             logger.warning("agent.model_unavailable", error=str(exc))
@@ -276,6 +294,7 @@ class PlanningAgent:
         window: ResponseWindow | None,
         elapsed: Any,
         called: list[str],
+        say: Callable[[str], None] = lambda _phase: None,
     ) -> tuple[AgentAnswer | None, str]:
         """Constrained decoding into the response schema, with one repair attempt.
 
@@ -321,6 +340,10 @@ class PlanningAgent:
                         "agent.rejected", attempt=attempt, gate=name, reason=verdict.reason
                     )
                     rejection = f"{name} ({verdict.reason})"
+                    # Worth saying out loud. A person watching a wait get longer deserves
+                    # to know it is being checked rather than stuck, and "the answer did
+                    # not pass, it is being redone" is the truth.
+                    say("repairing")
                     messages.append(Message("user", repair_prompt(verdict)))
                     break
             else:

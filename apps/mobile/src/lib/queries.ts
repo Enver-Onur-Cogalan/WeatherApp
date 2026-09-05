@@ -22,11 +22,15 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from "@tanstack/react-query";
+import { fetch as streamingFetch } from "expo/fetch";
 import { AskResponse, PlanResult } from "@weatherapp/schema";
 
 import { locationKey, planKey, readPlan, writePlan } from "@/db/plan-cache";
+import { useState } from "react";
+
 import { ApiError, post } from "@/lib/api";
-import { TIMEOUT_MS } from "@/lib/config";
+import { getAccessToken } from "@/lib/auth";
+import { API_BASE_URL, TIMEOUT_MS } from "@/lib/config";
 import type { SavedLocation } from "@/lib/locations";
 import type { Choice } from "@/lib/profiles";
 
@@ -101,23 +105,128 @@ export function usePlan(
   });
 }
 
+/**
+ * What the assistant is doing right now.
+ *
+ * The phases the agent actually goes through, in the order it goes through them. There is
+ * no fraction: the agent does not know one, and a progress bar built from a guess is the
+ * fiction docs/13 ruled out.
+ */
+export type AskPhase = "gathering" | "composing" | "repairing";
+
 export function useAsk(
   choice: Choice,
   place: SavedLocation,
-): UseMutationResult<AskResponse, Error, string> {
-  return useMutation({
-    mutationFn: (question: string) =>
-      post({
-        path: "/ask",
-        body: {
+): UseMutationResult<AskResponse, Error, string> & { phase: AskPhase | null } {
+  const [phase, setPhase] = useState<AskPhase | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: async (question: string) => {
+      setPhase("gathering");
+      return askStreaming(
+        {
           latitude: place.latitude,
           longitude: place.longitude,
           timezone: place.timezone,
           profile: choice.constraints,
           question,
         },
-        schema: AskResponse,
-        timeoutMs: TIMEOUT_MS.ask,
-      }),
+        setPhase,
+      );
+    },
+    onSettled: () => setPhase(null),
   });
+
+  return { ...mutation, phase };
+}
+
+/**
+ * One request, many lines.
+ *
+ * `expo/fetch` rather than the global one: React Native's `fetch` resolves `response.body`
+ * to null, so a streamed response can only be read after it has finished — which is
+ * exactly no better than not streaming. This is the WHATWG implementation Expo ships for
+ * that reason.
+ *
+ * Not routed through `lib/api.ts`. That layer parses one JSON body against one schema and
+ * refreshes tokens around it; this reads a stream of unrelated objects. Bending it to do
+ * both would make the common path carry the rare one's complexity.
+ */
+async function askStreaming(
+  body: unknown,
+  onPhase: (phase: AskPhase) => void,
+): Promise<AskResponse> {
+  if (API_BASE_URL === null) {
+    throw new ApiError("unconfigured", "No API address is configured.");
+  }
+
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), TIMEOUT_MS.ask);
+
+  try {
+    const token = getAccessToken();
+    const response = await streamingFetch(`${API_BASE_URL}/ask/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+      signal: deadline.signal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 503) {
+        throw new ApiError("forecast_unavailable", "Forecast unavailable", 503);
+      }
+      throw new ApiError(
+        response.status >= 500 ? "server" : "request",
+        `HTTP ${response.status}`,
+        response.status,
+      );
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new ApiError("contract", "The response could not be read.");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let answer: AskResponse | null = null;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // A chunk can end mid-line, so the last fragment is kept for the next read rather
+      // than parsed. Splitting and parsing everything would throw on a half-object.
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line) as { phase: string; answer?: unknown };
+        if (event.phase === "done") answer = AskResponse.parse(event.answer);
+        else onPhase(event.phase as AskPhase);
+      }
+    }
+
+    if (answer === null) {
+      // The stream ended without an answer: the connection dropped mid-thought.
+      throw new ApiError("server", "The assistant stopped before answering.");
+    }
+    return answer;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (deadline.signal.aborted) {
+      throw new ApiError(
+        "timeout",
+        `No answer within ${Math.round(TIMEOUT_MS.ask / 1000)}s.`,
+      );
+    }
+    throw new ApiError("unreachable", `Could not reach ${API_BASE_URL}.`);
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -44,7 +44,7 @@ import { useSelectedLocation } from "@/lib/locations";
 import { formatWindowDay, formatWindowSpan } from "@/lib/plan";
 import { useChoices } from "@/lib/profiles";
 import { arrive, leave } from "@/lib/motion";
-import { useAsk } from "@/lib/queries";
+import { useAsk, type AskPhase } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
 
 export function AskScreen() {
@@ -134,7 +134,7 @@ export function AskScreen() {
               {ask.isError ? (
                 <Failure error={ask.error} onRetry={retry} />
               ) : (
-                <Thinking label="Cihazda düşünüyor" />
+                <Thinking label={PHASES[ask.phase ?? "gathering"]} />
               )}
             </Animated.View>
           ) : null}
@@ -180,6 +180,24 @@ function Question({ text }: { text: string }) {
     </View>
   );
 }
+
+/**
+ * What the assistant is doing, in words rather than as a fraction.
+ *
+ * The wait is around forty seconds and the two halves are not equal — gathering the data
+ * took 28 of a measured 34, composing the sentence took 6. A single "thinking…" for all of
+ * it says nothing; these say which half, which is the only honest progress available since
+ * the agent does not know how far through it is.
+ *
+ * `repairing` is the interesting one. It means a gate rejected the answer and the model is
+ * being asked again — a wait getting longer because the thing is being checked, not
+ * because it is stuck, and worth saying so.
+ */
+const PHASES: Record<AskPhase, string> = {
+  gathering: "Hava verisi alınıyor",
+  composing: "Cevap yazılıyor",
+  repairing: "Cevap kontrolden geçmedi, yeniden yazılıyor",
+};
 
 /**
  * The answer, and what can be done with it.
