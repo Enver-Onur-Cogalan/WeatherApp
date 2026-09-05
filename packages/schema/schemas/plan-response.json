@@ -5,12 +5,23 @@
   "description": "The assistant's answer to a planning question. Every figure in it comes from the scoring engine; the model supplies the sentence, not the facts.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["verdict", "reason", "warnings"],
+  "required": [
+    "verdict",
+    "reason",
+    "warnings"
+  ],
   "properties": {
     "verdict": {
-      "type": "string",
-      "description": "Whether the conditions suit the activity.",
-      "enum": ["good", "mixed", "bad"]
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "How good the best window is for this profile, or null when the question was not asking for a judgement. \"Yarın kaç derece olacak?\" wants a temperature; forcing a verdict onto it made the model pick one at random, and the coherence gate correctly rejected the result.",
+      "enum": [
+        "good",
+        "mixed",
+        "bad"
+      ]
     },
     "best_window": {
       "$ref": "#/$defs/window",
@@ -25,25 +36,93 @@
     "warnings": {
       "type": "array",
       "description": "Conditions worth flagging even when the verdict is good. Empty when there are none.",
-      "items": { "type": "string", "maxLength": 200 },
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      },
       "maxItems": 4
     }
   },
   "$defs": {
     "window": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "additionalProperties": false,
-      "required": ["day", "start_hour", "end_hour", "score"],
+      "required": [
+        "day",
+        "start_hour",
+        "end_hour",
+        "score"
+      ],
       "properties": {
-        "day": { "type": "string", "description": "Local date as YYYY-MM-DD.", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-        "start_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
-        "end_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
-        "score": { "type": "number", "description": "Mean comfort score across the window, 0 to 100.", "minimum": 0, "maximum": 100 },
-        "temp_min_c": { "type": ["number", "null"], "description": "Coldest hour in the window. Computed by the scoring engine and attached to the answer \u2014 the model never produces a figure a person reads (ADR-0007).", "minimum": -90, "maximum": 60 },
-        "temp_max_c": { "type": ["number", "null"], "description": "Warmest hour in the window.", "minimum": -90, "maximum": 60 },
-        "wind_max_kmh": { "type": ["number", "null"], "description": "Strongest wind in the window.", "minimum": 0, "maximum": 300 },
-        "precip_prob_max_pct": { "type": ["integer", "null"], "description": "Highest chance of precipitation across the window.", "minimum": 0, "maximum": 100 },
-        "weather_code": { "type": ["integer", "null"], "description": "The most severe WMO code in the window \u2014 what the interface names the conditions from.", "minimum": 0, "maximum": 99 }
+        "day": {
+          "type": "string",
+          "description": "Local date as YYYY-MM-DD.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "start_hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "end_hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "score": {
+          "type": "number",
+          "description": "Mean comfort score across the window, 0 to 100.",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "temp_min_c": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Coldest hour in the window. Computed by the scoring engine and attached to the answer — the model never produces a figure a person reads (ADR-0007).",
+          "minimum": -90,
+          "maximum": 60
+        },
+        "temp_max_c": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Warmest hour in the window.",
+          "minimum": -90,
+          "maximum": 60
+        },
+        "wind_max_kmh": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Strongest wind in the window.",
+          "minimum": 0,
+          "maximum": 300
+        },
+        "precip_prob_max_pct": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Highest chance of precipitation across the window.",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "weather_code": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "The most severe WMO code in the window — what the interface names the conditions from.",
+          "minimum": 0,
+          "maximum": 99
+        }
       }
     }
   }

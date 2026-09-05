@@ -244,6 +244,36 @@ because it is stuck, and worth saying out loud.
 The plain `/ask` stays. The eval suite drives the agent directly and the endpoint is the
 simpler contract for anything that is not a phone.
 
+### D4 — The assistant could not hold a conversation — **partly fixed 2026-09-05**
+
+Nine ordinary questions, asked against the running service. Four distinct failures, and
+only one of them was the model being weak.
+
+| Asked | Was | Now |
+|---|---|---|
+| "Merhaba" / "Teşekkürler" / "Sen kimsin?" | *"the best window is Friday 06:00–11:00"* | says what it can answer |
+| "Bu hafta yağmur var mı?" | fell back | *"Yağmur yok."* |
+| "Gelecek ay nasıl olacak?" | *"the best window is…"* | says how far ahead it sees |
+| "Rüzgar limitim 25 olsa?" | *"the best window is…"* | says what it can answer |
+| "Yarın kaç derece olacak?" | fell back | **still falls back** |
+
+**Small talk got a planning verdict** because the fallback always did, whatever was asked.
+The old one answered the question it wished it had been asked. The signal is the model
+reaching for no tool with no earlier turn to lean on: for a planning question it reliably
+calls one, so when it does not, the question was something else.
+
+**A denial was being read as a claim.** `conditions_grounded` matched the word anywhere, so
+"yağmur yok" — a correct answer to one of the most natural questions anyone asks a weather
+app — was rejected for containing "yağmur". Turkish negates after the noun and English
+before it; both are checked now, verified across nine sentences including "no rain",
+"yağmur ihtimali düşük" and a sentence that denies one condition while inventing another.
+
+**"Yarın kaç derece olacak?" still fails**, and the reason is recorded rather than papered
+over: the model must state a verdict, that question has none, so it picks one and the
+coherence gate correctly rejects it. Making the field optional fixes it and changes the
+constrained-decoding grammar, which cost four scenarios — see docs/04. It needs a fix that
+does not touch the grammar.
+
 ## Decisions
 
 These cannot be built until something is decided, and two of them argue with decisions

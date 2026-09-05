@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /** The assistant's answer to a planning question. Every figure in it comes from the scoring engine; the model supplies the sentence, not the facts. */
 export const PlanResponse = z.object({
-  verdict: z.enum(["good", "mixed", "bad"]),
+  verdict: z.enum(["good", "mixed", "bad"]).nullable(),
   best_window: z.object({
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   start_hour: z.number().int().min(0).max(23),

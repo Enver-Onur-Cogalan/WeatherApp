@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from app.agent.language import detect
-from app.agent.orchestrator import PlanningAgent
+from app.agent.orchestrator import Exchange, PlanningAgent
 from app.agent.provider import Completion, Message, ModelUnavailableError, ToolCall
 from app.agent.tools import TOOLS, ToolRunner
 from app.agent.validation import (
@@ -471,7 +471,6 @@ class TestPhaseSeparation:
         assert [m.role for m in prompt] == ["system", "user"]
         folded = prompt[-1].content
         assert "ne zaman?" in folded, "the question stays beside the data"
-        assert "get_activity_windows" in folded
         assert "windows" in folded, "the tool payload itself is in the message"
 
     @pytest.mark.asyncio
@@ -515,6 +514,12 @@ class TestValidationLoop:
     @pytest.mark.asyncio
     async def test_two_bad_answers_fall_back_rather_than_looping(self) -> None:
         provider = ScriptedProvider(
+            # The tool call is not incidental. Without one the agent now answers that the
+            # question is outside what it does, and never reaches the composing phase this
+            # test is about.
+            tool_turns=[
+                Completion(text="", tool_calls=(ToolCall("get_activity_windows", {}),))
+            ],
             structured_turns=[
                 Completion(text="not json at all"),
                 Completion(text="still not json"),
@@ -526,6 +531,52 @@ class TestValidationLoop:
 
         assert answer.fell_back
         assert answer.response.best_window is not None, "the engine still has an answer"
+
+
+class TestOutOfScope:
+    """Asked something this assistant does not do, it says so.
+
+    Measured against the running service before this existed: "Merhaba", "Teşekkürler",
+    "Sen kimsin?", "Gelecek ay nasıl olacak?" and "Rüzgar limitim 25 olsa ne değişirdi?"
+    each produced *"the best window is Friday 06:00–11:00"* — a planning verdict recited
+    at somebody who had said thank you.
+    """
+
+    @pytest.mark.asyncio
+    async def test_small_talk_is_not_answered_with_a_plan(self) -> None:
+        provider = ScriptedProvider(tool_turns=[Completion(text="Merhaba!")])
+        answer = await PlanningAgent(provider=provider).answer(
+            "Merhaba", hours(), MORNING_RUNNER
+        )
+
+        assert answer.response.best_window is None, "no window is an answer to a greeting"
+        assert "hava durumu" in answer.response.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_it_says_how_far_ahead_it_can_see(self) -> None:
+        provider = ScriptedProvider(tool_turns=[Completion(text="I cannot.")])
+        answer = await PlanningAgent(provider=provider).answer(
+            "Gelecek ay nasıl olacak?", hours(), MORNING_RUNNER
+        )
+
+        assert "yedi gün" in answer.response.reason
+
+    @pytest.mark.asyncio
+    async def test_a_follow_up_is_not_treated_as_out_of_scope(self) -> None:
+        """No tool call plus a prior turn is a follow-up, not a question about nothing."""
+        provider = ScriptedProvider(
+            tool_turns=[Completion(text="")],
+            structured_turns=[Completion(text=answer_json("Sabah serin olduğu için."))],
+        )
+        answer = await PlanningAgent(provider=provider).answer(
+            "neden?",
+            hours(),
+            MORNING_RUNNER,
+            history=[Exchange(question="ne zaman?", answer="Sabah 06–10.")],
+        )
+
+        assert not answer.fell_back
+        assert "serin" in answer.response.reason
 
 
 class TestRejectionNamesTheGate:

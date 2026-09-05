@@ -13,7 +13,7 @@ class AgentAnswer(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     verdict: Literal["good", "mixed", "bad"] = Field(
-        description="Whether the conditions suit the activity."
+        description='How good the best window is for this profile, or null when the question was not asking for a judgement. "Yarın kaç derece olacak?" wants a temperature; forcing a verdict onto it made the model pick one at random, and the coherence gate correctly rejected the result.'
     )
     reason: str = Field(
         min_length=1,

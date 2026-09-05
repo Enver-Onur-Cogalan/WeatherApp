@@ -165,20 +165,69 @@ CONDITION_CLAIMS: dict[str, frozenset[int]] = {
 }
 
 
+# Saying a condition is absent is not claiming it is present, and the difference is the
+# whole sentence. Turkish negates after the noun — "yağmur yok" — and English before it —
+# "no rain" — so both sides of an occurrence are examined.
+NEGATION_AFTER = (
+    "yok",
+    "olmayacak",
+    "olmaz",
+    "beklenmiyor",
+    "beklenmez",
+    "görünmüyor",
+    "değil",
+    "yağmayacak",
+    "ihtimali düşük",
+    "riski yok",
+)
+NEGATION_BEFORE = ("no", "not", "without", "little", "zero", "free of")
+
+# How far to look. Long enough for "yağmur ihtimali düşük", short enough that a negation
+# belonging to the next clause is not borrowed.
+NEGATION_WINDOW = 24
+
+
+def _is_denied(text: str, word: str, at: int) -> bool:
+    """Whether this occurrence says the condition is *absent*."""
+    after = text[at + len(word) : at + len(word) + NEGATION_WINDOW]
+    if any(marker in after for marker in NEGATION_AFTER):
+        return True
+
+    before = text[max(0, at - NEGATION_WINDOW) : at]
+    return any(f"{marker} " in f"{before} " for marker in NEGATION_BEFORE)
+
+
 def conditions_grounded(response: AgentAnswer, codes: set[int]) -> Verdict:
     """Whether the weather the answer names is weather the forecast contains.
 
     Only claims that are checkable are checked. "It looks pleasant" is a judgement and
     stays the model's to make; "there are thunderstorms on Thursday" is a fact about the
     data, and if no hour carries a thunderstorm code then the model produced it.
+
+    **A denial is not a claim.** The first version matched the word anywhere in the
+    sentence, so asked "bu hafta yağmur var mı?" the model answered "yağmur yok" — which
+    is true, and which this gate rejected for containing the word "yağmur". Found by
+    running ordinary questions against the service: a correct answer to one of the most
+    natural things anyone asks a weather app was being thrown away by the gate meant to
+    catch invention.
     """
     text = f"{response.reason} {' '.join(response.warnings)}".lower()
+
     for word, valid in CONDITION_CLAIMS.items():
-        if word in text and not (codes & valid):
-            return Verdict(
-                ok=False,
-                reason=f"claims '{word}' but no hour in the forecast carries that condition",
-            )
+        if codes & valid:
+            continue  # The forecast has it; nothing to check.
+
+        at = text.find(word)
+        while at != -1:
+            if not _is_denied(text, word, at):
+                return Verdict(
+                    ok=False,
+                    reason=(
+                        f"claims '{word}' but no hour in the forecast carries that condition"
+                    ),
+                )
+            at = text.find(word, at + 1)
+
     return Verdict(ok=True)
 
 

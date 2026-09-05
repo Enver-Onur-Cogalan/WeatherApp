@@ -29,7 +29,7 @@ export const SUGGESTIONS = [
   "Hafta sonu piknik yapmayı düşünüyoruz, ne dersin?",
 ];
 
-export const VERDICT_LABELS: Record<Answer["verdict"], string> = {
+export const VERDICT_LABELS: Record<NonNullable<Answer["verdict"]>, string> = {
   good: "Uygun",
   mixed: "Kısmen",
   bad: "Uygun değil",

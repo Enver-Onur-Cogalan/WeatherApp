@@ -253,9 +253,7 @@ class PlanningAgent:
             # shown, not in a fresh forecast. Falling back on the tool count alone meant
             # the most natural thing a person does with an assistant — ask it to explain
             # itself — was the one thing it could never do.
-            return self._fallback(
-                hours, profile, elapsed(), "no tools were called", called, language
-            )
+            return self._out_of_scope(elapsed(), language)
 
         say("composing")
         try:
@@ -417,6 +415,43 @@ class PlanningAgent:
         return None, rejection
 
     # ------------------------------------------------------------------ fallback
+
+    def _out_of_scope(self, duration_ms: int, language: Language) -> AgentAnswer:
+        """We were asked something this assistant cannot answer.
+
+        Measured before it was written. "Merhaba", "Teşekkürler", "Sen kimsin?", "Gelecek
+        ay nasıl olacak?" and "Rüzgar limitim 25 olsa ne değişirdi?" each produced *"the
+        best window is Friday 06:00–11:00"* — a planning verdict recited at somebody who
+        had said thank you. The old fallback answered the question it wished it had been
+        asked.
+
+        The model reaching for no tool, with no earlier turn to lean on, is the signal. For
+        a planning question it reliably calls one; when it does not, the question was
+        something else, and saying so is better than confidently answering a different
+        question.
+        """
+        return AgentAnswer(
+            response=PlanResponse(
+                verdict="mixed",
+                best_window=None,
+                reason=(
+                    "I can only answer questions about the weather and when to go outside, "
+                    "for the next seven days. Ask me when to run, whether tomorrow morning "
+                    "works, or which day is better."
+                    if language == "en"
+                    else (
+                        "Yalnızca hava durumu ve ne zaman dışarı çıkacağın hakkındaki "
+                        "soruları, önümüzdeki yedi gün için cevaplayabiliyorum. Ne zaman "
+                        "koşayım, yarın sabah uygun mu, hangi gün daha iyi diye sorabilirsin."
+                    )
+                ),
+                warnings=[],
+            ),
+            tool_calls=(),
+            duration_ms=duration_ms,
+            fell_back=True,
+            fallback_reason="outside what the assistant answers",
+        )
 
     def _fallback(
         self,

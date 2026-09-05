@@ -420,7 +420,11 @@ function AnswerCard({ exchange }: { exchange: Exchange }) {
         accessibilityRole="button"
         accessibilityHint="Uzun bas: kopyala veya sil"
       >
-        <Text style={styles.verdict}>{VERDICT_LABELS[answer.verdict]}</Text>
+        {/* A factual question gets no verdict, and the card says nothing rather than
+            inventing a label for it. "Yarın kaç derece?" is not good, mixed or bad. */}
+        {answer.verdict ? (
+          <Text style={styles.verdict}>{VERDICT_LABELS[answer.verdict]}</Text>
+        ) : null}
 
         {window ? (
           <>
