@@ -5,18 +5,67 @@
   "description": "An open-ended question for the assistant. This is the tier most requests do not take — the trace screen answers the common ones deterministically, and this is the escape hatch for what it cannot (docs/06).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["latitude", "longitude", "timezone", "profile", "question"],
+  "required": [
+    "latitude",
+    "longitude",
+    "timezone",
+    "profile",
+    "question"
+  ],
   "properties": {
-    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
-    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
-    "timezone": { "type": "string", "description": "IANA name. Never a fixed offset.", "minLength": 1 },
-    "days": { "type": "integer", "minimum": 1, "maximum": 16 },
-    "profile": { "$ref": "https://weatherapp.local/schemas/activity-profile.json" },
+    "latitude": {
+      "type": "number",
+      "minimum": -90,
+      "maximum": 90
+    },
+    "longitude": {
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180
+    },
+    "timezone": {
+      "type": "string",
+      "description": "IANA name. Never a fixed offset.",
+      "minLength": 1
+    },
+    "days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16
+    },
+    "profile": {
+      "$ref": "https://weatherapp.local/schemas/activity-profile.json"
+    },
     "question": {
       "type": "string",
       "description": "What the person asked, in their own words and language.",
       "minLength": 1,
       "maxLength": 500
+    },
+    "history": {
+      "type": "array",
+      "description": "The last few exchanges, oldest first, so a follow-up has something to refer to. Two at most: \"neden?\" needs one, and more turns the escape hatch into a chat app, which ADR-0014 decided against.",
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question",
+          "answer"
+        ],
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "answer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          }
+        }
+      }
     }
   }
 }

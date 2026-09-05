@@ -124,6 +124,42 @@ NOTHING_GATHERED = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class Exchange:
+    """One question and the answer it got, as context for the next one."""
+
+    question: str
+    answer: str
+
+
+def _with_history(question: str, history: list[Exchange]) -> str:
+    """The question, with enough of what came before it to be answerable.
+
+    Without this, "neden?" is a question about nothing. The model was given it bare, had
+    no referent, called no tool, and the orchestrator fell back — so the one thing a
+    person most naturally does with an assistant produced "the assistant could not
+    answer". Reproduced before it was fixed: three follow-ups, three fallbacks, all
+    `no tools were called`.
+
+    Two exchanges at most, and that is a design limit rather than a technical one.
+    ADR-0014 made Sor an escape hatch rather than a chat surface, and docs/11 caps local
+    history at twenty for the same reason. A follow-up needs an antecedent; it does not
+    need a transcript. Whether this should become a real conversation is D2, which is
+    still open and is a larger question than this.
+
+    Marked as prior turns rather than concatenated. A model handed two questions in one
+    message answers the first, which is the failure this replaces with a different one.
+    """
+    if not history:
+        return question
+
+    prior = "\n".join(
+        f"Earlier — asked: {item.question}\nEarlier — answered: {item.answer}"
+        for item in history
+    )
+    return f"{prior}\n\nNow asked: {question}"
+
+
 def _fold(question: str, results: list[tuple[str, str]]) -> str:
     """Question, tool results and instruction as one user message.
 
@@ -167,6 +203,7 @@ class PlanningAgent:
         hours: list[ForecastHour],
         profile: ActivityProfile,
         on_phase: Callable[[str], None] | None = None,
+        history: list[Exchange] | None = None,
     ) -> AgentAnswer:
         """Answer a question, optionally saying what it is doing while it does it.
 
@@ -192,7 +229,7 @@ class PlanningAgent:
         # only hears about the second half watches nothing happen for most of the wait.
         say("gathering")
         try:
-            gathered = await self._gather(question, runner, facts, called)
+            gathered = await self._gather(question, runner, facts, called, history or [])
         except ModelUnavailableError as exc:
             logger.warning("agent.model_unavailable", error=str(exc))
             return self._fallback(
@@ -205,11 +242,17 @@ class PlanningAgent:
         codes = {hour.weather_code for hour in hours}
         dates = {local_date(hour) for hour in hours}
 
-        if not gathered:
-            # The model asked for nothing, so it has nothing to add over the engine.
-            # Composing anyway produced answers like "no tool results were provided",
-            # which is honest and useless — the deterministic path already has the
-            # answer, and this is routing rather than failure (docs/06).
+        if not gathered and not history:
+            # The model asked for nothing and has nothing else to go on, so it has nothing
+            # to add over the engine. Composing anyway produced answers like "no tool
+            # results were provided", which is honest and useless — the deterministic path
+            # already has the answer, and this is routing rather than failure (docs/06).
+            #
+            # `and not history` is what makes a follow-up work. Asked "neden?" the model
+            # calls no tool, and it is right not to: the reason is in the turn it was just
+            # shown, not in a fresh forecast. Falling back on the tool count alone meant
+            # the most natural thing a person does with an assistant — ask it to explain
+            # itself — was the one thing it could never do.
             return self._fallback(
                 hours, profile, elapsed(), "no tools were called", called, language
             )
@@ -217,7 +260,15 @@ class PlanningAgent:
         say("composing")
         try:
             answer, rejection = await self._compose(
-                question, gathered, facts, codes, dates, window, elapsed, called, say
+                _with_history(question, history or []),
+                gathered,
+                facts,
+                codes,
+                dates,
+                window,
+                elapsed,
+                called,
+                say,
             )
         except ModelUnavailableError as exc:
             logger.warning("agent.model_unavailable", error=str(exc))
@@ -243,13 +294,17 @@ class PlanningAgent:
         runner: ToolRunner,
         facts: Facts,
         called: list[str],
+        history: list[Exchange],
     ) -> list[tuple[str, str]]:
         """Let the model choose tools, and run what it chose.
 
         No schema is applied here. That is the entire point of the phase split, and the
         constraint tax measurement is what it rests on.
         """
-        messages = [Message("system", SYSTEM), Message("user", question)]
+        messages = [
+            Message("system", SYSTEM),
+            Message("user", _with_history(question, history)),
+        ]
         results: list[tuple[str, str]] = []
 
         for round_index in range(self.max_tool_rounds):

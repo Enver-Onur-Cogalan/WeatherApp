@@ -10,6 +10,10 @@ export const AskRequest = z.object({
   days: z.number().int().min(1).max(16).optional(),
   profile: ActivityProfile,
   question: z.string().min(1).max(500),
+  history: z.array(z.object({
+  question: z.string().min(1).max(500),
+  answer: z.string().min(1).max(600),
+}).strict()).max(2).optional(),
 }).strict();
 
 export type AskRequest = z.infer<typeof AskRequest>;

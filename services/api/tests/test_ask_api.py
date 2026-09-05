@@ -68,12 +68,24 @@ class StubAgent:
         self._answer = answer
         self.asked: list[str] = []
         self.hours_seen = 0
+        self.history_seen: list[object] = []
+        self.phases: list[str] = []
 
     async def answer(
-        self, question: str, hours: list[ForecastHour], profile: ActivityProfile
+        self,
+        question: str,
+        hours: list[ForecastHour],
+        profile: ActivityProfile,
+        on_phase: object = None,
+        history: list[object] | None = None,
     ) -> AgentAnswer:
         self.asked.append(question)
         self.hours_seen = len(hours)
+        self.history_seen = list(history or [])
+        if callable(on_phase):
+            for phase in ("gathering", "composing"):
+                on_phase(phase)
+                self.phases.append(phase)
         return self._answer
 
 
@@ -196,3 +208,85 @@ class TestReadyReportsTheAssistant:
             body = client.get("/ready").json()
         assert set(body) == {"status", "assistant", "model"}
         assert body["status"] in {"ready", "degraded"}
+
+
+class TestFollowUps:
+    """A follow-up needs an antecedent, and used to have none.
+
+    Asking "neden?" after a good answer produced "the assistant could not answer": the
+    model was handed the word alone, had nothing to refer to, called no tool, and the
+    orchestrator fell back. Reproduced against the running service before it was fixed —
+    three follow-ups, three fallbacks, every one of them `no tools were called`.
+    """
+
+    def test_prior_turns_reach_the_agent(self) -> None:
+        agent = StubAgent(an_answer())
+        with client_with(StubWeather(build_forecast()), agent) as client:
+            client.post(
+                "/ask",
+                json={
+                    **BODY,
+                    "question": "neden?",
+                    "history": [
+                        {"question": "En iyi zaman ne zaman?", "answer": "Cumartesi 06–11."}
+                    ],
+                },
+            )
+
+        assert len(agent.history_seen) == 1
+
+    def test_a_question_without_history_still_arrives(self) -> None:
+        agent = StubAgent(an_answer())
+        with client_with(StubWeather(build_forecast()), agent) as client:
+            client.post("/ask", json=BODY)
+
+        assert agent.history_seen == []
+
+    def test_more_than_two_turns_is_refused(self) -> None:
+        """The cap is a design limit rather than a technical one: ADR-0014 keeps Sor an
+        escape hatch rather than a chat surface, so the schema is where it is held."""
+        agent = StubAgent(an_answer())
+        three = [{"question": f"q{i}", "answer": f"a{i}"} for i in range(3)]
+        with client_with(StubWeather(build_forecast()), agent) as client:
+            response = client.post(
+                "/ask", json={**BODY, "question": "neden?", "history": three}
+            )
+
+        assert response.status_code == 422
+
+
+class TestStreaming:
+    def test_phases_arrive_before_the_answer(self) -> None:
+        agent = StubAgent(an_answer())
+        with client_with(StubWeather(build_forecast()), agent) as client:
+            response = client.post("/ask/stream", json=BODY)
+
+        assert response.status_code == 200
+        events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+        phases = [event["phase"] for event in events]
+
+        assert phases[:2] == ["gathering", "composing"]
+        assert phases[-1] == "done"
+        assert events[-1]["answer"]["on_device"] is True
+
+    def test_every_line_is_its_own_object(self) -> None:
+        """NDJSON, so a client can act on a line the moment it has one rather than
+        waiting for the whole body."""
+        agent = StubAgent(an_answer())
+        with client_with(StubWeather(build_forecast()), agent) as client:
+            response = client.post("/ask/stream", json=BODY)
+
+        for line in response.text.splitlines():
+            if line.strip():
+                assert isinstance(json.loads(line), dict)
+
+    def test_the_streamed_answer_matches_the_plain_one(self) -> None:
+        """Two endpoints, one answer. They share the response mapping precisely so this
+        cannot drift, and this is what says so."""
+        agent = StubAgent(an_answer())
+        with client_with(StubWeather(build_forecast()), agent) as client:
+            plain = client.post("/ask", json=BODY).json()
+            streamed = client.post("/ask/stream", json=BODY)
+
+        last = json.loads(streamed.text.splitlines()[-1])
+        assert last["answer"] == plain

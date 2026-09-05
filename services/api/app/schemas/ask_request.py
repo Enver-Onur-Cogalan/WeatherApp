@@ -24,3 +24,8 @@ class AskRequest(BaseModel):
         max_length=500,
         description="What the person asked, in their own words and language.",
     )
+    history: list[dict[str, object]] | None = Field(
+        default=None,
+        max_length=2,
+        description='The last few exchanges, oldest first, so a follow-up has something to refer to. Two at most: "neden?" needs one, and more turns the escape hatch into a chat app, which ADR-0014 decided against.',
+    )

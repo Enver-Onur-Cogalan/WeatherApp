@@ -18,7 +18,7 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from app.agent.orchestrator import AgentAnswer
+from app.agent.orchestrator import AgentAnswer, Exchange
 from app.api.plan import DEFAULT_DAYS, to_domain_profile
 from app.core.deps import AgentDep, WeatherDep
 from app.core.logging import get_logger
@@ -51,7 +51,10 @@ async def ask(request: AskRequest, weather: WeatherDep, agent: AgentDep) -> AskR
         ) from exc
 
     answer: AgentAnswer = await agent.answer(
-        request.question, list(forecast.hours), to_domain_profile(request.profile)
+        request.question,
+        list(forecast.hours),
+        to_domain_profile(request.profile),
+        history=_history(request),
     )
 
     logger.info(
@@ -84,6 +87,22 @@ def _validated(request: AskRequest) -> tuple[Location, int]:
         timezone=request.timezone,
     )
     return location, request.days or DEFAULT_DAYS
+
+
+def _history(request: AskRequest) -> list[Exchange]:
+    """The prior turns the client sent, as the agent's own type.
+
+    The schema caps this at two, so nothing here needs to trim. Malformed entries are
+    dropped rather than rejected: a follow-up that loses its context answers worse, and a
+    request that fails outright answers not at all.
+    """
+    turns: list[Exchange] = []
+    for raw in request.history or []:
+        question = raw.get("question")
+        answer = raw.get("answer")
+        if isinstance(question, str) and isinstance(answer, str):
+            turns.append(Exchange(question=question, answer=answer))
+    return turns
 
 
 def _response(answer: AgentAnswer) -> AskResponse:
@@ -144,6 +163,7 @@ async def ask_stream(
                 list(forecast.hours),
                 to_domain_profile(request.profile),
                 on_phase=queue.put_nowait,
+                history=_history(request),
             )
         )
 
