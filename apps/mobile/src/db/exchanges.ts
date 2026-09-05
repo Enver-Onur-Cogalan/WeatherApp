@@ -15,7 +15,6 @@ import { useLiveQuery } from "drizzle-orm/expo-sqlite";
 
 import { db, schema } from "@/db/client";
 import type { AskResponse, Exchange } from "@/lib/ask";
-import { uuidv7 } from "@/lib/uuid";
 
 const KEEP = 20;
 
@@ -47,16 +46,38 @@ export function useExchanges(): Exchange[] {
     .reverse(); // Oldest first, because the thread reads downward.
 }
 
+/**
+ * Write an exchange, at an id the caller chose.
+ *
+ * An upsert rather than an insert, because editing a question replaces the turn it belongs
+ * to rather than adding one below it. The id is the caller's so that a row can be shown as
+ * loading in place while its replacement is being fetched — a new id each time would leave
+ * the old answer on screen beside the new one.
+ *
+ * `createdAt` is preserved on a replacement, or the edited turn would jump to the bottom
+ * of a thread ordered by it.
+ */
 export async function recordExchange(
+  id: string,
   question: string,
   response: AskResponse,
 ): Promise<void> {
-  await db.insert(schema.askExchanges).values({
-    id: uuidv7(),
+  const existing = await db
+    .select({ createdAt: schema.askExchanges.createdAt })
+    .from(schema.askExchanges)
+    .where(eq(schema.askExchanges.id, id));
+
+  const row = {
+    id,
     question,
     responseJson: JSON.stringify(response),
-    createdAt: new Date().toISOString(),
-  });
+    createdAt: existing[0]?.createdAt ?? new Date().toISOString(),
+  };
+
+  await db
+    .insert(schema.askExchanges)
+    .values(row)
+    .onConflictDoUpdate({ target: schema.askExchanges.id, set: row });
 
   await evictOld();
 }

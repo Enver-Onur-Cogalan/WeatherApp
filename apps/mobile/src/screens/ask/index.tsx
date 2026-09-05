@@ -24,9 +24,10 @@ import {
   TextInput,
   View,
 } from "react-native";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
-import Animated from "react-native-reanimated";
+import Animated, { LinearTransition } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { forgetExchange, recordExchange, useExchanges } from "@/db/exchanges";
@@ -43,7 +44,8 @@ import {
 import { useSelectedLocation } from "@/lib/locations";
 import { formatWindowDay, formatWindowSpan } from "@/lib/plan";
 import { useChoices } from "@/lib/profiles";
-import { arrive, leave } from "@/lib/motion";
+import { arrive, EASE_OUT, leave } from "@/lib/motion";
+import { uuidv7 } from "@/lib/uuid";
 import { useAsk, type AskPhase } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
 
@@ -53,7 +55,16 @@ export function AskScreen() {
   // long as the screen did before, which docs/11 lists as deletion by accident rather
   // than by choice.
   const exchanges = useExchanges();
-  const [pending, setPending] = useState<string | null>(null);
+  /**
+   * The turn being answered, if any.
+   *
+   * It carries an id so the loading state can appear **where the turn is** rather than
+   * always at the bottom: a new question gets a fresh id and lands below, an edited one
+   * keeps its own and is replaced in place. One piece of state covers both, which is what
+   * stops the two paths drifting.
+   */
+  const [pending, setPending] = useState<{ id: string; question: string } | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const scroller = useRef<ScrollView>(null);
   // The first profile, which is the one İz opens on. Asking about a different profile
   // than the trace is showing would make two screens disagree about the same question.
@@ -64,34 +75,50 @@ export function AskScreen() {
   const toEnd = () =>
     requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
 
-  const send = (question: string) => {
+  /**
+   * Ask, either as a new turn or as a replacement for one.
+   *
+   * `id` decides which. Passing an existing exchange's id keeps its place in the thread
+   * and overwrites it on success; the old answer never sits beside the new one, and a
+   * failure leaves the original exactly where it was.
+   */
+  const send = (question: string, id?: string) => {
     const asked = question.trim();
     if (!asked || pending) return;
 
+    const turn = { id: id ?? uuidv7(), question: asked };
     setDraft("");
-    setPending(asked);
-    // Scroll after the pending row mounts, so the wait is visible rather than
-    // happening somewhere off screen.
-    toEnd();
+    setEditing(null);
+    setPending(turn);
+    // Scroll after the pending row mounts, so the wait is visible rather than happening
+    // somewhere off screen. Only for a new turn — an edit is already in view, and pulling
+    // the thread to the bottom would move it away from what the person is watching.
+    if (id === undefined) toEnd();
 
     ask.mutate(asked, {
       onSuccess: (response) => {
-        void recordExchange(asked, response);
+        void recordExchange(turn.id, asked, response);
         setPending(null);
-        toEnd();
+        if (id === undefined) toEnd();
       },
-      // The question stays on screen above the failure, so it is obvious which one
-      // failed and the person can see what to retry.
-      onError: toEnd,
+      // The question stays on screen above the failure, so it is obvious which one failed
+      // and what to retry.
+      onError: () => {
+        if (id === undefined) toEnd();
+      },
     });
   };
 
   const retry = () => {
-    const asked = pending;
-    if (asked === null) return;
+    if (pending === null) return;
+    const { id, question } = pending;
     setPending(null);
-    send(asked);
+    // Replacing an existing turn keeps its id; a new one had a fresh id already, and
+    // reusing it means a retry cannot leave two rows behind.
+    send(question, exchanges.some((item) => item.id === id) ? id : undefined);
   };
+
+  const replacing = pending !== null && exchanges.some((item) => item.id === pending.id);
 
   const empty = exchanges.length === 0 && pending === null;
 
@@ -117,20 +144,41 @@ export function AskScreen() {
           {exchanges.map((exchange) => (
             // `entering` and `exiting` on the turn rather than the card, so a question
             // and its answer arrive and leave as one thing — which is what they are.
+            // `layout` closes the gap when one is deleted instead of the rest jumping.
             <Animated.View
               key={exchange.id}
               style={styles.turn}
               entering={arrive()}
               exiting={leave()}
+              layout={LinearTransition.duration(220).easing(EASE_OUT)}
             >
-              <Question text={exchange.question} />
-              <AnswerCard exchange={exchange} />
+              {pending?.id === exchange.id ? (
+                <>
+                  <Question text={pending.question} />
+                  {ask.isError ? (
+                    <Failure error={ask.error} onRetry={retry} />
+                  ) : (
+                    <Thinking label={PHASES[ask.phase ?? "gathering"]} />
+                  )}
+                </>
+              ) : (
+                <>
+                  <Question
+                    text={exchange.question}
+                    editing={editing === exchange.id}
+                    onEdit={() => setEditing(exchange.id)}
+                    onCancelEdit={() => setEditing(null)}
+                    onSubmitEdit={(next) => send(next, exchange.id)}
+                  />
+                  <AnswerCard exchange={exchange} />
+                </>
+              )}
             </Animated.View>
           ))}
 
-          {pending !== null ? (
+          {pending !== null && !replacing ? (
             <Animated.View style={styles.turn} entering={arrive()}>
-              <Question text={pending} />
+              <Question text={pending.question} />
               {ask.isError ? (
                 <Failure error={ask.error} onRetry={retry} />
               ) : (
@@ -173,11 +221,152 @@ function Empty({ onPick, place }: { onPick: (question: string) => void; place: s
   );
 }
 
-function Question({ text }: { text: string }) {
+/**
+ * What was asked, and what can be done with it.
+ *
+ * Long-press reveals copy and edit. Editing happens **here**, in the bubble, rather than
+ * in the composer at the bottom: the composer is where new questions go, and borrowing it
+ * to change one halfway up the thread leaves a person typing in one place while watching
+ * another.
+ */
+function Question({
+  text,
+  editing = false,
+  onEdit,
+  onCancelEdit,
+  onSubmitEdit,
+}: {
+  text: string;
+  editing?: boolean;
+  onEdit?: () => void;
+  onCancelEdit?: () => void;
+  onSubmitEdit?: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(text);
+  const [seenText, setSeenText] = useState(text);
+
+  // The draft follows the question when it changes underneath — after an edit lands, or
+  // when the row is reused for a different exchange. Adjusted during render rather than
+  // in an effect: React documents this for exactly the case of resetting state when a
+  // prop changes, and an effect would render the stale draft once before correcting it.
+  if (text !== seenText) {
+    setSeenText(text);
+    setDraft(text);
+  }
+
+  if (editing) {
+    const changed = draft.trim().length > 0 && draft.trim() !== text;
+    return (
+      <Animated.View style={styles.questionRow} entering={arrive()}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          style={[styles.question, styles.questionEditing]}
+          multiline
+          autoFocus
+          onSubmitEditing={() => changed && onSubmitEdit?.(draft)}
+        />
+        <View style={styles.menu}>
+          <IconAction
+            icon="check"
+            label="Kaydet ve yeniden sor"
+            tone={changed ? "accent" : "quiet"}
+            onPress={() => changed && onSubmitEdit?.(draft)}
+          />
+          <IconAction
+            icon="close"
+            label="Vazgeç"
+            onPress={() => {
+              setDraft(text);
+              onCancelEdit?.();
+            }}
+          />
+        </View>
+      </Animated.View>
+    );
+  }
+
   return (
     <View style={styles.questionRow}>
-      <Text style={styles.question}>{text}</Text>
+      <Pressable
+        onLongPress={() => {
+          setOpen(true);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+        delayLongPress={350}
+        accessibilityRole="button"
+        accessibilityHint="Uzun bas: kopyala veya düzenle"
+      >
+        <Text style={[styles.question, open && styles.dimmed]}>{text}</Text>
+      </Pressable>
+
+      {open ? (
+        <Animated.View style={styles.menuOver} entering={arrive()} exiting={leave()}>
+          <IconAction
+            icon="content-copy"
+            label="Kopyala"
+            onPress={() => {
+              void Clipboard.setStringAsync(text);
+              setOpen(false);
+            }}
+          />
+          <IconAction
+            icon="pencil-outline"
+            label="Düzenle"
+            onPress={() => {
+              setOpen(false);
+              onEdit?.();
+            }}
+          />
+          <IconAction icon="close" label="Kapat" onPress={() => setOpen(false)} />
+        </Animated.View>
+      ) : null}
     </View>
+  );
+}
+
+/**
+ * One action in a long-press menu.
+ *
+ * Icons rather than words, on a surface rather than floating. The first version was three
+ * words in a row under the card, which read as body text that happened to be tappable —
+ * a menu has to look like a thing you act on, not like a sentence.
+ *
+ * The label is not shown and is not optional: an icon-only control with no accessible
+ * name is a button a screen reader announces as nothing at all.
+ */
+function IconAction({
+  icon,
+  label,
+  onPress,
+  tone = "quiet",
+}: {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  label: string;
+  onPress: () => void;
+  tone?: "quiet" | "accent" | "destructive";
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={({ pressed }) => [styles.iconButton, pressed && styles.iconPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <MaterialCommunityIcons
+        name={icon}
+        size={17}
+        color={
+          tone === "destructive"
+            ? colors.ember
+            : tone === "accent"
+              ? colors.burnHi
+              : colors.ink2
+        }
+      />
+    </Pressable>
   );
 }
 
@@ -227,7 +416,7 @@ function AnswerCard({ exchange }: { exchange: Exchange }) {
       <Pressable
         onLongPress={reveal}
         delayLongPress={350}
-        style={styles.card}
+        style={[styles.card, open && styles.dimmed]}
         accessibilityRole="button"
         accessibilityHint="Uzun bas: kopyala veya sil"
       >
@@ -257,27 +446,22 @@ function AnswerCard({ exchange }: { exchange: Exchange }) {
       </Pressable>
 
       {open ? (
-        <Animated.View style={styles.actions} entering={arrive()} exiting={leave()}>
-          <Pressable
+        <Animated.View style={styles.menuOver} entering={arrive()} exiting={leave()}>
+          <IconAction
+            icon="content-copy"
+            label="Kopyala"
             onPress={() => {
               void Clipboard.setStringAsync(asText(exchange));
               setOpen(false);
             }}
-            hitSlop={6}
-            accessibilityRole="button"
-          >
-            <Text style={styles.actionQuiet}>Kopyala</Text>
-          </Pressable>
-          <Pressable
+          />
+          <IconAction
+            icon="trash-can-outline"
+            label="Sil"
+            tone="destructive"
             onPress={() => void forgetExchange(exchange.id)}
-            hitSlop={6}
-            accessibilityRole="button"
-          >
-            <Text style={styles.actionDestructive}>Sil</Text>
-          </Pressable>
-          <Pressable onPress={() => setOpen(false)} hitSlop={6} accessibilityRole="button">
-            <Text style={styles.actionQuiet}>Kapat</Text>
-          </Pressable>
+          />
+          <IconAction icon="close" label="Kapat" onPress={() => setOpen(false)} />
         </Animated.View>
       ) : null}
 
@@ -393,14 +577,62 @@ const styles = StyleSheet.create({
   readingCool: { color: colors.glacial },
   readingWarn: { color: colors.ember },
 
-  actions: {
+  /**
+   * Over the thing it acts on, not under it.
+   *
+   * It sat below the card first, and the connection broke: a row of controls under a card
+   * reads as belonging to whatever comes next as easily as to what came before. Laid on
+   * top there is nothing to infer — and the card dims behind it, which says the same thing
+   * a second way for anyone who does not read position as meaning.
+   */
+  menuOver: {
+    position: "absolute",
+    top: space.sm,
+    right: space.sm,
     flexDirection: "row",
-    gap: space.lg,
-    paddingTop: space.sm,
-    paddingHorizontal: space.md,
+    gap: space.xs,
+    padding: space.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.ground2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.rule,
+    // Enough lift to read as above the surface rather than cut into it. Android needs
+    // elevation; iOS ignores it and takes the shadow.
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
-  actionQuiet: { ...type.label, color: colors.inkDim },
-  actionDestructive: { ...type.label, color: colors.ember },
+  dimmed: { opacity: 0.45 },
+
+  // The editing controls stay in flow: nothing is being pointed at, the field is the
+  // subject, and floating them would cover the text being typed.
+  menu: {
+    flexDirection: "row",
+    alignSelf: "flex-end",
+    gap: space.xs,
+    marginTop: space.sm,
+    padding: space.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.ground2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.rule,
+  },
+  iconButton: {
+    width: 34,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.sm,
+  },
+  iconPressed: { backgroundColor: colors.surface },
+  questionEditing: {
+    borderColor: colors.burn,
+    backgroundColor: colors.ground2,
+    color: colors.ink,
+    minWidth: "70%",
+  },
 
   safe: { flex: 1, backgroundColor: colors.ground },
   fill: { flex: 1 },

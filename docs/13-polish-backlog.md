@@ -128,9 +128,16 @@ deliberately.
 
 Copy, edit, delete. Icons alone are enough — no labels needed.
 
-**Copy and delete; edit is dropped.** Editing an exchange would mean editing an answer the
-model produced, which is not a thing that can be true — the alternative, re-asking an
-edited question, is a new exchange and the composer already does it.
+**Copy and delete on the answer; copy and edit on the question.** Editing an *answer* is
+still not a thing that can be true — but editing the *question* is, and it is what a person
+reaches for when they meant something slightly different. It re-asks in place: the turn
+keeps its id, shows the wait where it already is, and is replaced on success. A failure
+leaves the original exactly where it was, which is the whole reason the row is kept rather
+than removed and re-added.
+
+Editing happens in the bubble rather than in the composer. The composer is where new
+questions go, and borrowing it to change one halfway up the thread leaves a person typing
+in one place while watching another.
 
 **Drawn rather than native, and that is a compromise.** docs/02's rule is native where a
 component would only say the platform's name, and a context menu is exactly that. But
@@ -139,8 +146,17 @@ currently runs — there is no development build. So it is the same in-place rev
 profile rows use. If a dev build ever lands, this is the first thing that should become
 native.
 
-Words rather than icons, against the note above: three actions, one of them destructive,
-and an icon-only destructive action in a custom-drawn menu asks a person to guess.
+**Icons, on a surface, over the card.** The first version was three words in a row *under*
+the card, which was wrong twice: it read as body text that happened to be tappable, and
+sitting below it belonged to whatever came next as readily as to what came before. It is
+laid on top now, with the card dimmed behind — position says what it acts on, and the
+dimming says it again for anyone who does not read position as meaning.
+
+Every icon carries an accessible label even though none is shown. An icon-only control
+with no accessible name is a button a screen reader announces as nothing at all.
+
+The editing controls stay in flow rather than floating: nothing is being pointed at, the
+field is the subject, and an overlay would cover the text being typed.
 
 ### F3 — Say which place the answer is about — **done 2026-09-05**
 **Where:** Sor, and arguably the answer itself.
