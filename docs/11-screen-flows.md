@@ -227,9 +227,10 @@ Built 2026-09-05. The last hard-coded thing anyone could see: İstanbul was a co
 two screens and in every request, while the server's `saved_locations` table had been built
 and tested for a week with nothing reading it.
 
-**The place name in İz's header is the way in.** It is where a person looks to find out
-where they are looking, which makes it where they will try to change it. A settings row
-three taps away would be somewhere else entirely.
+**Places live in Sen, not on İz.** The header was briefly a picker, which put a settings
+surface on the screen the app is *for*: İz answers when to go, and choosing where is
+something you set once and forget. The header still names the place, because a forecast
+that does not say where it is about is not much of a forecast.
 
 **Search is the only way to add one.** Asking for coordinates would be asking a person to
 do the geocoder's job — and a place without its IANA timezone is a forecast an unknown
@@ -246,8 +247,19 @@ the device's own position. Being somewhere and looking at somewhere are differen
 questions, and one flag answering both is how a person ends up unable to check the weather
 where they are going without lying about where they are.
 
-One component, used from two directions — a sheet in İz for switching, embedded in Sen for
-managing. Two screens for one list is two screens to keep in step.
+**The device's own position is offered, not demanded.** A location prompt on first launch,
+before anyone has asked the app for anything, is the behaviour that teaches people to
+refuse — so nothing is asked until someone presses the button. After that it keeps itself
+current silently, once per launch, and only when permission is already granted.
+
+It rewrites the same record rather than adding one, so the selection survives and the list
+does not grow a row every time the phone moves. And it only writes when the fix is a
+kilometre or more from the stored one: the forecast cache rounds to about that anyway, and
+GPS jitters by tens of metres on a desk — without the threshold the record would be
+rewritten and a plan re-requested on every launch to receive the same answer.
+
+Refusing is a normal answer and says so. Everything still works; a place is typed instead,
+which is what people did before this existed.
 
 ## Pulling to refresh
 

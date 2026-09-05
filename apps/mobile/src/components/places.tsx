@@ -1,9 +1,14 @@
 /**
  * Choosing and keeping places.
  *
- * One component, used from two directions: İz opens it as a sheet to switch the place on
- * screen, and Sen embeds it to manage the list. The difference is a prop, because two
- * screens for one list is two screens to keep in step.
+ * It lives in Sen. It was briefly reachable from İz's header as a sheet, which put a
+ * settings surface on the screen the app is *for* — İz answers when to go, and choosing
+ * where is something you set once and forget. The header still names the place.
+ *
+ * The device's own position is offered rather than demanded. A location prompt on first
+ * launch, before anyone has asked the app for anything, is the behaviour that teaches
+ * people to refuse — so nothing is asked until someone presses the button, and after that
+ * it keeps itself current silently.
  *
  * Search is the only way to add one. Asking a person for coordinates would be asking them
  * to do the geocoder's job, and a place without its IANA timezone is a forecast an unknown
@@ -25,6 +30,7 @@ import Animated from "react-native-reanimated";
 import { arrive, leave } from "@/lib/motion";
 import {
   fromPlace,
+  useCurrentLocation,
   useDeleteLocation,
   useSaveLocation,
   useSearchPlaces,
@@ -43,7 +49,9 @@ export function Places({
   const { selected, select, saved } = useSelectedLocation();
   const save = useSaveLocation();
   const remove = useDeleteLocation();
+  const { current, detectHere, asking } = useCurrentLocation();
   const [adding, setAdding] = useState(false);
+  const [refused, setRefused] = useState(false);
 
   const keep = (place: Place) => {
     const location = fromPlace(place);
@@ -74,6 +82,31 @@ export function Places({
           />
         ))
       )}
+
+      {/* Offered once, not asked for on startup. A location prompt before anyone has
+          asked the app for anything is what teaches people to refuse. */}
+      {current === null ? (
+        <Pressable
+          onPress={async () => {
+            const allowed = await detectHere();
+            setRefused(!allowed);
+          }}
+          disabled={asking}
+          style={[styles.add, asking && styles.dim]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.addText}>
+            {asking ? "Konum alınıyor…" : "Konumumu kullan"}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {refused ? (
+        <Text style={styles.note}>
+          Konum izni verilmedi. Yerini aşağıdan arayarak ekleyebilirsin — uygulamanın geri
+          kalanı aynı şekilde çalışır.
+        </Text>
+      ) : null}
 
       {adding ? (
         <Animated.View entering={arrive()} exiting={leave()}>
@@ -108,7 +141,12 @@ function Row({
   return (
     <View style={[styles.row, active && styles.rowActive]}>
       <Pressable style={styles.rowMain} onPress={onSelect} accessibilityRole="button">
-        <Text style={[styles.label, active && styles.labelActive]}>{place.label}</Text>
+        <Text style={[styles.label, active && styles.labelActive]}>
+          {place.label}
+          {/* Named rather than left to be inferred from the fact that it changed by
+              itself. A row that rewrites its own name is confusing until you know why. */}
+          {place.is_current ? <Text style={styles.badge}>  konumum</Text> : null}
+        </Text>
         <Text style={styles.zone}>{place.timezone}</Text>
       </Pressable>
 
@@ -210,6 +248,8 @@ const styles = StyleSheet.create({
   label: { ...type.body, fontSize: size.caption, color: colors.ink },
   labelActive: { color: colors.burnHi },
   zone: { ...type.data, fontSize: 10, color: colors.inkDim },
+  badge: { ...type.label, fontSize: 9, color: colors.glacial },
+  dim: { opacity: 0.5 },
 
   confirm: { flexDirection: "row", gap: space.md, alignItems: "center" },
   destructive: { ...type.label, color: colors.ember },

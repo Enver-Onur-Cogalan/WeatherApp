@@ -23,6 +23,7 @@ import {
   useLocalLocations,
 } from "@/db/locations";
 import { request } from "@/lib/api";
+import { locate, movedFar, permissionState, type Here } from "@/lib/here";
 import { useAuth } from "@/lib/auth";
 import { DEFAULT_LOCATION, TIMEOUT_MS } from "@/lib/config";
 import { uuidv7 } from "@/lib/uuid";
@@ -214,4 +215,81 @@ export function fromPlace(place: Place): SavedLocation {
     created_at: now,
     updated_at: now,
   };
+}
+
+
+/**
+ * Keep the device's own position up to date.
+ *
+ * Runs once per launch and only when permission has already been granted — a location
+ * prompt on startup, before anyone has asked for anything, is the behaviour that teaches
+ * people to refuse. The affordance in Sen is what asks.
+ *
+ * It rewrites the existing `is_current` record rather than adding one, so the selection
+ * survives and the list does not grow a row every time the phone moves. And it only writes
+ * when the fix is a kilometre or more from the stored one: GPS jitters by tens of metres
+ * on a desk, and without the threshold this would rewrite a record and re-request a plan
+ * on every launch to receive the same answer.
+ */
+export function useCurrentLocation() {
+  const { saved } = useLocations();
+  const save = useSaveLocation();
+  const [asking, setAsking] = useState(false);
+
+  const current = saved.find((place) => place.is_current) ?? null;
+
+  const apply = (here: Here) => {
+    const now = new Date().toISOString();
+    save({
+      // The same record, updated. A new id each time would leave a trail of stale places
+      // and lose whatever the person had selected.
+      id: current?.id ?? uuidv7(),
+      label: here.label,
+      latitude: here.latitude,
+      longitude: here.longitude,
+      timezone: here.timezone,
+      is_current: true,
+      sort_order: 0,
+      created_at: current?.created_at ?? now,
+      updated_at: now,
+    });
+  };
+
+  // Once per launch, silently, if we are already allowed.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if ((await permissionState()) !== "granted") return;
+      const here = await locate(false);
+      if (cancelled || here === null) return;
+      if (current !== null && !movedFar(here, current)) return;
+      apply(here);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Deliberately once. Re-running as `saved` changes would fire on every write it makes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * The explicit ask, from a button someone pressed.
+   *
+   * Not named `useMyLocation`, tempting as that was: a returned function whose name starts
+   * with `use` reads to the hooks lint rule as a hook called from a callback, which is an
+   * error rather than a warning. The name would have been a small lie anyway.
+   */
+  const detectHere = async (): Promise<boolean> => {
+    setAsking(true);
+    try {
+      const here = await locate(true);
+      if (here === null) return false;
+      apply(here);
+      return true;
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  return { current, detectHere, asking };
 }

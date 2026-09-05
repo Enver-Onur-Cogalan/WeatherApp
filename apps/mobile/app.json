@@ -10,7 +10,10 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "dev.weatherapp.mobile",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Bulunduğun yerin hava durumunu gösterebilmek için konumun kullanılır. Konumun cihazından çıkmaz; yalnızca kendi sunucuna sorulur."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -37,7 +40,14 @@
         }
       ],
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Bulunduğun yerin hava durumunu gösterebilmek için konumun kullanılır. Konumun cihazından çıkmaz; yalnızca kendi sunucuna sorulur.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

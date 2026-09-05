@@ -204,6 +204,17 @@ Limits are edited with steppers, not sliders. These are integers with meaning â€
 is a decision, and a slider that lands on 14 because of where a thumb stopped makes a
 person fight the control instead of expressing a limit.
 
+## A config plugin that `expo install` does not add
+
+`npx expo install expo-location` installs the package and does **not** add its config
+plugin, so a real build gets no `NSLocationWhenInUseUsageDescription` â€” and iOS denies the
+permission without ever showing a prompt.
+
+It works perfectly in Expo Go, because Expo Go carries usage descriptions for every module
+it bundles. That is the shape of the trap: the thing that would fail is invisible in the
+environment the app is developed in. Checked with `expo config --json` rather than
+believed, which is the only way to see the merged result.
+
 ## Still open
 
 - **Only profiles move.** Saved locations exist on the server and are not stored on the

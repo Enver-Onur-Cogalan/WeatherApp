@@ -28,12 +28,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Atmosphere } from "@/components/atmosphere";
 import { Calendar } from "@/components/calendar";
-import { Places } from "@/components/places";
 import { Now } from "@/components/now";
 import { Legible, quantiseScroll, SkyProvider, useInk } from "@/components/legible";
 import { Failure, Loading } from "@/components/states";
 import { Trace } from "@/components/trace";
-import { arrive, leave } from "@/lib/motion";
+import { arrive } from "@/lib/motion";
 import {
   CONSTRAINT_LABELS,
   bestHourIndex,
@@ -141,7 +140,6 @@ function Loaded({
   const [scrubbed, setScrubbed] = useState<number | null>(null);
   const [scrollY, setScrollY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [picking, setPicking] = useState(false);
 
   /**
    * Pull to refresh.
@@ -223,7 +221,7 @@ function Loaded({
           }}
         >
         <Legible style={styles.header}>
-          <Header place={place.label} plan={plan} onPress={() => setPicking(true)} />
+          <Header place={place.label} plan={plan} />
         </Legible>
 
         {/* The banner's button and the pull do the same thing. Both earn their place: the
@@ -321,17 +319,6 @@ function Loaded({
         )}
         </ScrollView>
 
-        {picking ? (
-          <Animated.View style={styles.picker} entering={arrive()} exiting={leave()}>
-            <View style={styles.pickerHead}>
-              <Text style={styles.pickerTitle}>Yerler</Text>
-              <Pressable onPress={() => setPicking(false)} hitSlop={8} accessibilityRole="button">
-                <Text style={styles.pickerClose}>Kapat</Text>
-              </Pressable>
-            </View>
-            <Places onPicked={() => setPicking(false)} />
-          </Animated.View>
-        ) : null}
         </SkyProvider>
       </SafeAreaView>
     </View>
@@ -341,25 +328,16 @@ function Loaded({
 /**
  * The place and how old the forecast is, in whatever ink the sky behind them wants.
  *
- * The place name is the way into the picker. It is where a person looks to find out where
- * they are looking, which makes it where they will try to change it — a settings row three
- * taps away would be somewhere else entirely.
+ * A label rather than a control. It was briefly a picker, opening a sheet from the header,
+ * and that put a settings surface on the screen the app is *for* — İz answers when to go,
+ * and choosing where lives with the other things you set once. The header still names the
+ * place, because a forecast that does not say where it is about is not much of a forecast.
  */
-function Header({
-  place,
-  plan,
-  onPress,
-}: {
-  place: string;
-  plan: PlanResult;
-  onPress: () => void;
-}) {
+function Header({ place, plan }: { place: string; plan: PlanResult }) {
   const ink = useInk();
   return (
     <>
-      <Pressable onPress={onPress} hitSlop={8} accessibilityRole="button">
-        <Text style={[styles.place, { color: ink.ink }]}>{place} ⌄</Text>
-      </Pressable>
+      <Text style={[styles.place, { color: ink.ink }]}>{place}</Text>
       <Text style={[styles.age, { color: ink.inkDim }]}>
         {plan.stale ? "bayat · " : ""}
         {formatAge(plan.fetched_at)}
@@ -477,28 +455,6 @@ function Chip({
 }
 
 const styles = StyleSheet.create({
-  picker: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: "72%",
-    backgroundColor: colors.ground2,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.rule,
-    paddingHorizontal: space.lg,
-    paddingTop: space.md,
-    paddingBottom: space.xxl,
-    gap: space.sm,
-  },
-  pickerHead: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-  },
-  pickerTitle: { ...type.label, color: colors.burnHi },
-  pickerClose: { ...type.label, color: colors.inkDim },
-
   offline: {
     flexDirection: "row",
     alignItems: "center",
