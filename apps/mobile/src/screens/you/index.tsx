@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { moveProfilesToAccount, pendingProfiles } from "@/db/handoff";
 import { useAuth } from "@/lib/auth";
+import { Places } from "@/components/places";
 import { Profiles } from "@/screens/you/profiles";
 import { colors, radius, size, space, type } from "@/theme";
 
@@ -51,10 +52,18 @@ export function YouScreen() {
         {/* Profiles belong to a person whether or not that person has an account. A
             guest's live in SQLite on the device; an account's live on the server. The
             screen is the same either way, which is what stops the two paths drifting. */}
-        {status !== "restoring" ? <Profiles /> : null}
+        {status !== "restoring" ? (
+          <>
+            <Profiles />
+            <View style={styles.card}>
+              <Text style={styles.label}>Yerler</Text>
+              <Places />
+            </View>
+          </>
+        ) : null}
 
         <Text style={styles.pending}>
-          Konumlar, bildirimler ve asistan durumu buraya gelecek.
+          Bildirimler ve asistan durumu buraya gelecek.
         </Text>
       </ScrollView>
     </SafeAreaView>

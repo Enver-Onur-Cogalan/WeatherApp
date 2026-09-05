@@ -142,7 +142,7 @@ native.
 Words rather than icons, against the note above: three actions, one of them destructive,
 and an icon-only destructive action in a custom-drawn menu asks a person to guess.
 
-### F3 — Say which place the answer is about — **half done 2026-09-03**
+### F3 — Say which place the answer is about — **done 2026-09-05**
 **Where:** Sor, and arguably the answer itself.
 
 Nothing on the screen names the location. Someone in İzmir cannot tell whether the answer
@@ -156,6 +156,11 @@ smaller half — showing the place on the answer card — can land first.
 **The smaller half landed with the API wiring.** Both screens now name the place, and it
 comes from one constant that the requests are built from, so the label cannot disagree
 with what was actually asked. The larger half still needs somewhere to store a place.
+
+**The larger half is done.** Places are searched, saved, selected and deleted — on the
+server for an account, on the device for a guest, through one component. The constant is
+gone from everything except a fallback that exists so a first launch shows a forecast
+instead of an empty state demanding setup. See docs/11.
 
 ### F4 — Error state — **done 2026-09-03**
 **Where:** Sor.

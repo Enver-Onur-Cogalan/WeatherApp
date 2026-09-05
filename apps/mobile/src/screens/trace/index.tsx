@@ -28,11 +28,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Atmosphere } from "@/components/atmosphere";
 import { Calendar } from "@/components/calendar";
+import { Places } from "@/components/places";
 import { Now } from "@/components/now";
 import { Legible, quantiseScroll, SkyProvider, useInk } from "@/components/legible";
 import { Failure, Loading } from "@/components/states";
 import { Trace } from "@/components/trace";
-import { arrive } from "@/lib/motion";
+import { arrive, leave } from "@/lib/motion";
 import {
   CONSTRAINT_LABELS,
   bestHourIndex,
@@ -47,7 +48,7 @@ import {
   type Span,
   type Window,
 } from "@/lib/plan";
-import { DEFAULT_LOCATION } from "@/lib/config";
+import { useSelectedLocation } from "@/lib/locations";
 import { useChoices, type Choice } from "@/lib/profiles";
 import { usePlan } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
@@ -61,7 +62,8 @@ export function TraceScreen() {
   // Falls back to the first rather than holding a stale key: a profile can be deleted on
   // another device, and a chip pointing at nothing would leave the screen blank.
   const choice = choices.find((item) => item.key === chosen) ?? choices[0];
-  const { data: plan, error, isPending, refetch } = usePlan(choice);
+  const { selected } = useSelectedLocation();
+  const { data: plan, error, isPending, refetch } = usePlan(choice, selected);
 
   // Three states, and the order matters. A device cache means `plan` can be present while
   // `error` is set — the server is unreachable and the last answer to this exact question
@@ -69,7 +71,7 @@ export function TraceScreen() {
   // draws, rather than showing a failure it has the data to avoid.
   if (isPending) {
     return (
-      <Shell>
+      <Shell place={selected.label}>
         <Loading label="Tahmin alınıyor" />
       </Shell>
     );
@@ -77,7 +79,7 @@ export function TraceScreen() {
 
   if (plan === undefined) {
     return (
-      <Shell>
+      <Shell place={selected.label}>
         <Failure error={error} onRetry={() => void refetch()} />
       </Shell>
     );
@@ -88,6 +90,7 @@ export function TraceScreen() {
       plan={plan}
       choices={choices}
       choice={choice}
+      place={selected}
       onChoose={setChosen}
       offline={error !== null}
       onRefresh={async () => {
@@ -99,13 +102,13 @@ export function TraceScreen() {
 }
 
 /** The header and background, with nothing to draw in them yet. */
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ place, children }: { place: string; children: React.ReactNode }) {
   return (
     <View style={styles.safe}>
       <SafeAreaView style={styles.fill} edges={["top"]}>
         <View style={styles.scroll}>
           <View style={styles.header}>
-            <Text style={styles.place}>{DEFAULT_LOCATION.name}</Text>
+            <Text style={styles.place}>{place}</Text>
           </View>
           {children}
         </View>
@@ -118,6 +121,7 @@ function Loaded({
   plan,
   choices,
   choice,
+  place,
   onChoose,
   offline,
   onRefresh,
@@ -125,6 +129,7 @@ function Loaded({
   plan: PlanResult;
   choices: Choice[];
   choice: Choice;
+  place: { label: string };
   onChoose: (key: string) => void;
   /** The server could not be reached and this trace came off the device. */
   offline: boolean;
@@ -136,6 +141,7 @@ function Loaded({
   const [scrubbed, setScrubbed] = useState<number | null>(null);
   const [scrollY, setScrollY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   /**
    * Pull to refresh.
@@ -217,7 +223,7 @@ function Loaded({
           }}
         >
         <Legible style={styles.header}>
-          <Header place={DEFAULT_LOCATION.name} plan={plan} />
+          <Header place={place.label} plan={plan} onPress={() => setPicking(true)} />
         </Legible>
 
         {/* The banner's button and the pull do the same thing. Both earn their place: the
@@ -314,18 +320,46 @@ function Loaded({
           </Animated.View>
         )}
         </ScrollView>
+
+        {picking ? (
+          <Animated.View style={styles.picker} entering={arrive()} exiting={leave()}>
+            <View style={styles.pickerHead}>
+              <Text style={styles.pickerTitle}>Yerler</Text>
+              <Pressable onPress={() => setPicking(false)} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.pickerClose}>Kapat</Text>
+              </Pressable>
+            </View>
+            <Places onPicked={() => setPicking(false)} />
+          </Animated.View>
+        ) : null}
         </SkyProvider>
       </SafeAreaView>
     </View>
   );
 }
 
-/** The place and how old the forecast is, in whatever ink the sky behind them wants. */
-function Header({ place, plan }: { place: string; plan: PlanResult }) {
+/**
+ * The place and how old the forecast is, in whatever ink the sky behind them wants.
+ *
+ * The place name is the way into the picker. It is where a person looks to find out where
+ * they are looking, which makes it where they will try to change it — a settings row three
+ * taps away would be somewhere else entirely.
+ */
+function Header({
+  place,
+  plan,
+  onPress,
+}: {
+  place: string;
+  plan: PlanResult;
+  onPress: () => void;
+}) {
   const ink = useInk();
   return (
     <>
-      <Text style={[styles.place, { color: ink.ink }]}>{place}</Text>
+      <Pressable onPress={onPress} hitSlop={8} accessibilityRole="button">
+        <Text style={[styles.place, { color: ink.ink }]}>{place} ⌄</Text>
+      </Pressable>
       <Text style={[styles.age, { color: ink.inkDim }]}>
         {plan.stale ? "bayat · " : ""}
         {formatAge(plan.fetched_at)}
@@ -443,6 +477,28 @@ function Chip({
 }
 
 const styles = StyleSheet.create({
+  picker: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxHeight: "72%",
+    backgroundColor: colors.ground2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.rule,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+    paddingBottom: space.xxl,
+    gap: space.sm,
+  },
+  pickerHead: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+  },
+  pickerTitle: { ...type.label, color: colors.burnHi },
+  pickerClose: { ...type.label, color: colors.inkDim },
+
   offline: {
     flexDirection: "row",
     alignItems: "center",

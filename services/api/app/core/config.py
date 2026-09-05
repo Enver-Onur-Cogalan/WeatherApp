@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: int = 120
 
     open_meteo_base_url: str = "https://api.open-meteo.com/v1"
+    # A different host from the forecast API, and keyless like it. Proxied rather than
+    # called from the phone so the app talks to one server, and so a place can be looked
+    # up the same way whether or not the device can reach the open internet.
+    open_meteo_geocoding_url: str = "https://geocoding-api.open-meteo.com/v1"
     forecast_cache_ttl_seconds: int = 600
     agent_cache_ttl_seconds: int = 1800
 

@@ -40,7 +40,7 @@ import {
   type Exchange,
   type Reading,
 } from "@/lib/ask";
-import { DEFAULT_LOCATION } from "@/lib/config";
+import { useSelectedLocation } from "@/lib/locations";
 import { formatWindowDay, formatWindowSpan } from "@/lib/plan";
 import { useChoices } from "@/lib/profiles";
 import { arrive, leave } from "@/lib/motion";
@@ -58,7 +58,8 @@ export function AskScreen() {
   // The first profile, which is the one İz opens on. Asking about a different profile
   // than the trace is showing would make two screens disagree about the same question.
   const { choices } = useChoices();
-  const ask = useAsk(choices[0]);
+  const { selected } = useSelectedLocation();
+  const ask = useAsk(choices[0], selected);
 
   const toEnd = () =>
     requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
@@ -98,7 +99,7 @@ export function AskScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Sor</Text>
-        <Text style={styles.local}>{DEFAULT_LOCATION.name} · yerel</Text>
+        <Text style={styles.local}>{selected.label} · yerel</Text>
       </View>
 
       <KeyboardAvoidingView
@@ -111,7 +112,7 @@ export function AskScreen() {
           contentContainerStyle={styles.thread}
           keyboardDismissMode="interactive"
         >
-          {empty ? <Empty onPick={send} /> : null}
+          {empty ? <Empty onPick={send} place={selected.label} /> : null}
 
           {exchanges.map((exchange) => (
             // `entering` and `exiting` on the turn rather than the card, so a question
@@ -150,13 +151,12 @@ export function AskScreen() {
   );
 }
 
-function Empty({ onPick }: { onPick: (question: string) => void }) {
+function Empty({ onPick, place }: { onPick: (question: string) => void; place: string }) {
   return (
     <View style={styles.empty}>
       <Text style={styles.emptyLead}>
         İz ekranının cevaplamadığı her şeyi buraya sorabilirsin. Cevaplar{" "}
-        {DEFAULT_LOCATION.name} için, model cihazda çalışıyor — sorun hiçbir yere
-        gitmiyor.
+        {place} için, model cihazda çalışıyor — sorun hiçbir yere gitmiyor.
       </Text>
       <Text style={styles.emptyLabel}>Örnek sorular</Text>
       {SUGGESTIONS.map((question) => (

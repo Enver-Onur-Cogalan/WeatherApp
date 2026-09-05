@@ -26,7 +26,8 @@ import { AskResponse, PlanResult } from "@weatherapp/schema";
 
 import { locationKey, planKey, readPlan, writePlan } from "@/db/plan-cache";
 import { ApiError, post } from "@/lib/api";
-import { DEFAULT_LOCATION, TIMEOUT_MS } from "@/lib/config";
+import { TIMEOUT_MS } from "@/lib/config";
+import type { SavedLocation } from "@/lib/locations";
 import type { Choice } from "@/lib/profiles";
 
 /** Errors that will not get better by being repeated. */
@@ -46,29 +47,23 @@ export const queryClient = new QueryClient({
   },
 });
 
-export function usePlan(choice: Choice): UseQueryResult<PlanResult, Error> {
-  const key = planKey(
-    DEFAULT_LOCATION.latitude,
-    DEFAULT_LOCATION.longitude,
-    choice.constraints,
-  );
+export function usePlan(
+  choice: Choice,
+  place: SavedLocation,
+): UseQueryResult<PlanResult, Error> {
+  const key = planKey(place.latitude, place.longitude, choice.constraints);
 
   return useQuery({
     // Keyed on the limits rather than on the profile's name or id: two profiles with the
     // same constraints score identically, and editing a name should not refetch.
-    queryKey: [
-      "plan",
-      DEFAULT_LOCATION.latitude,
-      DEFAULT_LOCATION.longitude,
-      choice.constraints,
-    ],
+    queryKey: ["plan", place.latitude, place.longitude, choice.constraints],
     queryFn: ({ signal }) =>
       post({
         path: "/plan",
         body: {
-          latitude: DEFAULT_LOCATION.latitude,
-          longitude: DEFAULT_LOCATION.longitude,
-          timezone: DEFAULT_LOCATION.timezone,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          timezone: place.timezone,
           profile: choice.constraints,
         },
         schema: PlanResult,
@@ -78,11 +73,7 @@ export function usePlan(choice: Choice): UseQueryResult<PlanResult, Error> {
         // Written on the way through rather than in `onSuccess`: a cache that only fills
         // when a callback happens to run is a cache that is empty exactly when something
         // else went wrong.
-        writePlan(
-          key,
-          locationKey(DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude),
-          plan,
-        );
+        writePlan(key, locationKey(place.latitude, place.longitude), plan);
         return plan;
       }),
 
@@ -110,15 +101,18 @@ export function usePlan(choice: Choice): UseQueryResult<PlanResult, Error> {
   });
 }
 
-export function useAsk(choice: Choice): UseMutationResult<AskResponse, Error, string> {
+export function useAsk(
+  choice: Choice,
+  place: SavedLocation,
+): UseMutationResult<AskResponse, Error, string> {
   return useMutation({
     mutationFn: (question: string) =>
       post({
         path: "/ask",
         body: {
-          latitude: DEFAULT_LOCATION.latitude,
-          longitude: DEFAULT_LOCATION.longitude,
-          timezone: DEFAULT_LOCATION.timezone,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          timezone: place.timezone,
           profile: choice.constraints,
           question,
         },

@@ -163,8 +163,7 @@ rate limiting; the mobile app — the trace, the week, the assistant, the accoun
 the gate — with a device database, offline plans, guest mode and the handoff into an
 account.
 
-**Not built:** location management, so the app still asks about one hard-coded place.
-Notification rules. Password reset, which needs mail infrastructure a self-hosted instance
+**Not built:** notification rules. Password reset, which needs mail infrastructure a self-hosted instance
 may not have and is
 [documented rather than half-implemented](docs/07-auth-and-security.md). And there are no
 tests on the mobile side at all — types, lint, a shader compile check and a migration check

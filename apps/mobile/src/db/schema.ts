@@ -104,3 +104,33 @@ export const planCache = sqliteTable(
   },
   (table) => [index("ix_plan_cache_fetched").on(table.fetchedAt)],
 );
+
+
+export const savedLocations = sqliteTable(
+  "saved_locations",
+  {
+    id: text("id").primaryKey(),
+    /** Null while these belong to nobody — the guest case, as with profiles. */
+    userId: text("user_id"),
+
+    /** What the person calls it, which is what the geocoder returned until they edit it. */
+    label: text("label").notNull(),
+
+    // Stored as text, not real. SQLite's REAL is a double and would print 41.008199999
+    // back at a server that sent 41.0082 — a difference of nothing that looks like an
+    // edit, and last-write-wins is decided on exactly that kind of comparison.
+    latitude: text("latitude").notNull(),
+    longitude: text("longitude").notNull(),
+
+    /** IANA name. Never an offset, which is wrong twice a year (docs/12). */
+    timezone: text("timezone").notNull(),
+
+    isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    pending: integer("pending", { mode: "boolean" }).notNull().default(true),
+  },
+  (table) => [index("ix_saved_locations_user").on(table.userId)],
+);

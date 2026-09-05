@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 
-from app.api import ask, auth, health, plan, saved
+from app.api import ask, auth, geocode, health, plan, saved
 from app.core import deps
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger, request_id_var
@@ -64,3 +64,4 @@ app.include_router(auth.router)
 app.include_router(plan.router)
 app.include_router(ask.router)
 app.include_router(saved.router)
+app.include_router(geocode.router)

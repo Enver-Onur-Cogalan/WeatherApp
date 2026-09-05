@@ -26,6 +26,7 @@ from app.core.logging import get_logger
 from app.db.session import get_session
 from app.weather.cache import ForecastCache, RedisLike
 from app.weather.client import OpenMeteoClient
+from app.weather.geocoding import GeocodingClient
 from app.weather.service import WeatherService
 
 logger = get_logger(__name__)
@@ -69,6 +70,14 @@ async def get_weather_service() -> AsyncIterator[WeatherService]:
 
 
 WeatherDep = Annotated[WeatherService, Depends(get_weather_service)]
+
+
+async def get_geocoding() -> GeocodingClient:
+    settings = get_settings()
+    return GeocodingClient(settings.open_meteo_geocoding_url, client=_http_client)
+
+
+GeocodingDep = Annotated[GeocodingClient, Depends(get_geocoding)]
 
 
 async def get_agent() -> AsyncIterator[PlanningAgent]:

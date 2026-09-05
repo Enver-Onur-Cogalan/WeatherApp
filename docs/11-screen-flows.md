@@ -221,6 +221,34 @@ because losing them is the one thing that would make signing up feel like a puni
 | Ask history local, capped | Full synced chat history | Consistent with the privacy stance, and avoids inheriting chat-app expectations |
 | Deep-linkable İz | Screen-local state | A notification must be able to open the exact hour it is about |
 
+## Places
+
+Built 2026-09-05. The last hard-coded thing anyone could see: İstanbul was a constant, on
+two screens and in every request, while the server's `saved_locations` table had been built
+and tested for a week with nothing reading it.
+
+**The place name in İz's header is the way in.** It is where a person looks to find out
+where they are looking, which makes it where they will try to change it. A settings row
+three taps away would be somewhere else entirely.
+
+**Search is the only way to add one.** Asking for coordinates would be asking a person to
+do the geocoder's job — and a place without its IANA timezone is a forecast an unknown
+number of hours out (docs/12), which is why the server drops a result that has none rather
+than defaulting it. Open-Meteo's geocoder is keyless like its forecast API, and it is
+proxied through this service so the app talks to one host and gets its timezone from the
+same place its weather comes from.
+
+The results disambiguate themselves: "Beşiktaş" is three different places in Turkey, so
+the admin area is folded into the name when it says something the name does not.
+
+**Which place is selected is deliberately not `is_current`.** doc 12 defines that flag as
+the device's own position. Being somewhere and looking at somewhere are different
+questions, and one flag answering both is how a person ends up unable to check the weather
+where they are going without lying about where they are.
+
+One component, used from two directions — a sheet in İz for switching, embedded in Sen for
+managing. Two screens for one list is two screens to keep in step.
+
 ## Pulling to refresh
 
 Added 2026-09-05. `RefreshControl` rather than a hand-rolled gesture: the guidance reserves
