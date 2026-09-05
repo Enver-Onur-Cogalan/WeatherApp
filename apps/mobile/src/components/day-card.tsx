@@ -140,10 +140,21 @@ export function DayCard({
       ].join(", ")}
     >
       <View style={styles.head}>
-        <Text style={[styles.weekday, day.today && styles.weekdayToday]}>
-          {day.weekday}
-        </Text>
-        <Text style={styles.date}>{day.dayLabel}</Text>
+        <View style={styles.when}>
+          <Text style={[styles.weekday, day.today && styles.weekdayToday]}>
+            {day.weekday}
+          </Text>
+          {/* The condition, back after the cut. It was dropped as one of eleven competing
+              elements, and on a card of five it has room — and it is the one thing a
+              person looks for on a weather app that the burn cannot say. The burn answers
+              "when is it good"; this answers "what is it like". */}
+          <Text style={[styles.condition, severe && styles.severe]} numberOfLines={1}>
+            {day.dayLabel} · {conditionLabel(day.summary.weather_code)}
+            {day.summary.precip_prob_max_pct >= 20
+              ? ` · %${day.summary.precip_prob_max_pct}`
+              : ""}
+          </Text>
+        </View>
         <Text style={[styles.temp, severe && styles.severe]}>
           {Math.round(day.summary.temp_max_c)}°
           <Text style={styles.low}> {Math.round(day.summary.temp_min_c)}°</Text>
@@ -268,12 +279,15 @@ const styles = StyleSheet.create({
   today: { borderColor: colors.burn, backgroundColor: colors.ground2 },
   pressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
 
-  head: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
+  head: { flexDirection: "row", alignItems: "flex-start", gap: space.sm },
+  when: { flex: 1, gap: 1 },
   // A week is scanned by day name, so the day name is the largest thing on the card and
   // everything else defers to it.
   weekday: { ...type.display, fontSize: 18, color: colors.ink },
   weekdayToday: { color: colors.burnHi },
-  date: { ...type.data, fontSize: 10, color: colors.inkDim, flex: 1 },
+  // The date moved into the condition's line rather than taking one of its own: two small
+  // grey lines stacked is the density the cut was for.
+  condition: { ...type.body, fontSize: 11, color: colors.ink2 },
   temp: { ...type.data, fontSize: 20, color: colors.ink },
   low: { ...type.data, fontSize: 13, color: colors.inkDim },
   severe: { color: colors.ember },

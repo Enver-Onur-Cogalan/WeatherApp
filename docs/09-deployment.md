@@ -69,3 +69,24 @@ what routing is worth.
 The nightly evaluation job needs a machine with a model on it, which a hosted CI runner
 does not have. It runs on a self-hosted runner; where that is unavailable, the job is
 skipped rather than faked.
+
+## Migrations run with the image, not beside it
+
+Found 2026-09-05, by running the documented path for the first time.
+
+`docker compose up` built, started, reported healthy, and answered `/health`, `/ready` and
+`/plan` perfectly. Every account endpoint returned 500: `relation "users" does not exist`.
+Nothing had ever applied a migration to the container's fresh volume, and the Dockerfile
+did not even copy `alembic/` into the image — so it could not have been done by hand
+either.
+
+Everything that needed no table worked, which is exactly why it looked fine.
+
+The image now carries its migrations and an entrypoint that applies them before starting
+the server, with `set -e` so a failed migration stops the container rather than serving
+against a schema it does not match. A crash loop is loud; the alternative is quiet.
+
+Verified afterwards on the macOS path, container to host Ollama (ADR-0010): migrations
+applied, registration 201, profiles listed, `/plan` 200, and `/ask` answered from the model
+in 36 seconds.
+

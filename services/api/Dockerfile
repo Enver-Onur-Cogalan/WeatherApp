@@ -14,6 +14,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev || uv sync --no-install-project --no-dev
 
 COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini docker-entrypoint.sh ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev || uv sync --no-dev
 
@@ -27,6 +29,11 @@ RUN groupadd --gid 1001 weather \
 WORKDIR /app
 COPY --from=builder --chown=weather:weather /app/.venv /app/.venv
 COPY --from=builder --chown=weather:weather /app/app /app/app
+# Migrations travel with the image. Without them the container starts, serves everything
+# that needs no table, and 500s on the rest.
+COPY --from=builder --chown=weather:weather /app/alembic /app/alembic
+COPY --from=builder --chown=weather:weather /app/alembic.ini /app/alembic.ini
+COPY --from=builder --chown=weather:weather /app/docker-entrypoint.sh /app/docker-entrypoint.sh
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
@@ -38,4 +45,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
