@@ -97,15 +97,33 @@ which cannot tell snow from rain or hail from a shower. WMO codes can:
 | 1–2 | Partly cloudy |
 | 3 | Overcast |
 | 45, 48 | Fog |
-| 51–57, 61–63, 80–81 | Light rain |
-| 65, 66, 67, 82 | Downpour |
+| 51–55, 61–63, 80, 81 | Light rain |
+| 65, 82 | Downpour |
+| 56, 57, 66, 67 | Freezing rain |
 | 71–77, 85, 86 | Snow |
 | 95 | Thunderstorm |
 | 96, 99 | Hail |
 
-Extreme heat, extreme cold and windy are **not** WMO conditions — they are thresholds on
-temperature and wind, applied over whatever the code says. They modify the scene rather
-than replacing it.
+**Freezing rain is its own state, and was not always.** 56 and 57 are freezing drizzle,
+66 and 67 freezing rain, and all four used to be read as ordinary water — 66 and 67 as a
+downpour, 56 and 57 as light rain. The engine never agreed: `HARD_EXCLUSION_CODES` has
+excluded every one of them from the start, because ice underfoot is the condition that
+most changes whether a person should be outside. Only the client was wrong, and it named
+and drew them as rain for as long as it existed.
+
+**Thunder is not a state.** A condition names what *falls*, which makes 96 and 99 hail —
+correctly, since that is what lands on you. All three of 95, 96 and 99 carry thunder, so
+lightning is asked as a separate question (`hasThunder`) rather than read off the
+condition. Asking the condition drew hail out of a silent sky on the two loudest codes in
+the set.
+
+Extreme cold and windy are **not** WMO conditions — they are thresholds on temperature
+and wind, applied over whatever the code says. They modify the scene rather than
+replacing it. Heat is now one of them: the atmosphere layer reads `temperature_c` and
+draws rising air low in the frame above about 28°C. Cold deliberately draws nothing,
+because there is no optical phenomenon of cold air to draw and inventing one would be the
+ornament [ADR-0013](./adr/ADR-0013-data-driven-atmosphere.md) refuses. Cold lives in the
+sky palette and in the figures.
 
 ### NotificationRule
 

@@ -134,7 +134,19 @@ Two properties make it the spine rather than a chart:
 Weather happens *to* the instrument, not behind it. Sky and precipitation occupy the far
 and middle planes; the trace stays crisp in front and is never fogged.
 
-Reasoning and consequences: [ADR-0013](./adr/ADR-0013-data-driven-atmosphere.md).
+Reasoning and consequences: [ADR-0013](./adr/ADR-0013-data-driven-atmosphere.md), and
+[ADR-0019](./adr/ADR-0019-atmosphere-as-specimen.md) for the one surface allowed to run
+it on fixed specimens rather than a forecast — the tour, whose subject is the layer.
+
+Two things the layer draws that are not conditions. **Heat** is rising air low in the
+frame, from `temperature_c` above about 28°C: the layer read five fields for a long time
+and none of them separated minus ten from forty-two, in an app whose whole question is
+whether to be outside. Cold draws nothing on purpose, because there is no optical
+phenomenon of cold air and inventing one would be ornament. **The sun and the moon**
+travel the arc `elevation` already describes, read sideways — thirteen hours of day,
+eleven of night — and both are hidden by anything but a clear or partly clouded sky. The
+layer drew stars, cloud, rain, snow, hail, fog, wind and lightning before it drew the one
+object everybody looks for.
 
 **Thirteen states**, each with its own physics rather than one effect recoloured:
 

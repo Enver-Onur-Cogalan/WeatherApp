@@ -43,3 +43,4 @@ reversed — and why — is more valuable than a tidy folder.
 | [0016](./ADR-0016-cache-the-scored-plan.md) | The device caches the scored plan, not the raw forecast | Accepted | 2026-09-05 |
 | [0017](./ADR-0017-assistant-that-advises.md) | The assistant converses and advises, within the engine's numbers | Accepted | 2026-09-05 |
 | [0018](./ADR-0018-language-is-chosen-not-detected.md) | The person chooses the language; the server checks the answer against it | Accepted | 2026-09-05 |
+| [0019](./ADR-0019-atmosphere-as-specimen.md) | The atmosphere may run on a specimen, outside the forecast surface | Accepted | 2026-09-09 |

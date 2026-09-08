@@ -1,7 +1,13 @@
 # ADR-0013 — Atmosphere as a second reading, not decoration
 
-- **Status:** Accepted
+- **Status:** Accepted, extended by [ADR-0019](./ADR-0019-atmosphere-as-specimen.md)
 - **Date:** 2026-08-25
+
+> **Note (2026-09-09):** everything below still holds on the forecast surface, which is
+> what it was written about: there the layer encodes the scrubbed hour's real values and
+> nothing else. [ADR-0019](./ADR-0019-atmosphere-as-specimen.md) adds the one case this
+> did not anticipate — a screen whose *subject* is the layer may run it on fixed
+> specimens, which today means the onboarding tour and nothing else.
 
 ## Context
 
