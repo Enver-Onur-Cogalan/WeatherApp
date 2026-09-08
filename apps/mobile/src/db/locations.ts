@@ -49,7 +49,16 @@ function toRow(location: SavedLocation): Row {
   };
 }
 
-export function useLocalLocations(): SavedLocation[] {
+/**
+ * The device's places, and whether they have actually been read yet.
+ *
+ * `loaded` is not decoration. `useLiveQuery` returns `undefined` on the first render, and
+ * a caller that treats that as "no places" concludes there is no current location — which
+ * is how `useCurrentLocation` came to write a *new* record on every launch instead of
+ * updating the one it already had. An empty list and an unread list are different
+ * answers, and this is what lets a caller tell them apart.
+ */
+export function useLocalLocations(): { locations: SavedLocation[]; loaded: boolean } {
   const { data } = useLiveQuery(
     db
       .select()
@@ -58,7 +67,7 @@ export function useLocalLocations(): SavedLocation[] {
       .orderBy(desc(schema.savedLocations.createdAt)),
   );
 
-  return (data ?? []).map(toLocation);
+  return { locations: (data ?? []).map(toLocation), loaded: data !== undefined };
 }
 
 export async function saveLocalLocation(location: SavedLocation): Promise<void> {

@@ -14,6 +14,7 @@
  * this side of the wire; repeating them only delays the error by a few seconds.
  */
 
+import { useLanguage } from "@/lib/i18n";
 import {
   QueryClient,
   keepPreviousData,
@@ -35,7 +36,12 @@ import type { SavedLocation } from "@/lib/locations";
 import type { Choice } from "@/lib/profiles";
 
 /** Errors that will not get better by being repeated. */
-const PERMANENT = new Set(["unconfigured", "request", "contract", "forecast_unavailable"]);
+const PERMANENT = new Set([
+  "unconfigured",
+  "request",
+  "contract",
+  "forecast_unavailable",
+]);
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,7 +50,9 @@ export const queryClient = new QueryClient({
       // a screen mounts would be traffic without information.
       staleTime: 10 * 60 * 1000,
       retry: (failureCount, error) =>
-        error instanceof ApiError && PERMANENT.has(error.kind) ? false : failureCount < 2,
+        error instanceof ApiError && PERMANENT.has(error.kind)
+          ? false
+          : failureCount < 2,
       refetchOnWindowFocus: false,
     },
     mutations: { retry: false },
@@ -119,6 +127,10 @@ export function useAsk(
   place: SavedLocation,
 ): UseMutationResult<AskResponse, Error, string> & { phase: AskPhase | null } {
   const [phase, setPhase] = useState<AskPhase | null>(null);
+  // Sent rather than left to the server's word list. The server instructs the model with
+  // it *and* checks the answer against it (`right_language`), which it could not do while
+  // the language was a guess made from the question.
+  const language = useLanguage();
 
   const mutation = useMutation({
     mutationFn: async (question: string) => {
@@ -130,6 +142,7 @@ export function useAsk(
           timezone: place.timezone,
           profile: choice.constraints,
           question,
+          language,
         },
         setPhase,
       );
@@ -163,6 +176,22 @@ async function askStreaming(
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(), TIMEOUT_MS.ask);
 
+  /**
+   * Whether the request ever got a response.
+   *
+   * The whole of this function used to sit in one `try` whose `catch` called everything
+   * `unreachable`. A schema mismatch, a malformed line, a stream that broke halfway, a
+   * bug in this file — all of them told the person their server could not be reached, and
+   * sent them to check a network that was working. It cost an evening: the server log
+   * showed the answer being written and returned 200 while the phone said the host was
+   * unreachable, and none of the obvious suspects was the cause because the error had
+   * already been thrown away by the time anyone could look at it.
+   *
+   * So: only a failure to *connect* is unreachable, and every other error keeps its own
+   * text. The card shows that text on its technical line.
+   */
+  let connected = false;
+
   try {
     const token = getAccessToken();
     const response = await streamingFetch(`${API_BASE_URL}/ask/stream`, {
@@ -174,6 +203,7 @@ async function askStreaming(
       body: JSON.stringify(body),
       signal: deadline.signal,
     });
+    connected = true;
 
     if (!response.ok) {
       if (response.status === 503) {
@@ -187,29 +217,38 @@ async function askStreaming(
     }
 
     const reader = response.body?.getReader();
-    if (!reader) throw new ApiError("contract", "The response could not be read.");
+    if (!reader)
+      throw new ApiError("contract", "The response could not be read.");
 
     const decoder = new TextDecoder();
     let buffer = "";
     let answer: AskResponse | null = null;
 
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
+        buffer += decoder.decode(value, { stream: true });
 
-      // A chunk can end mid-line, so the last fragment is kept for the next read rather
-      // than parsed. Splitting and parsing everything would throw on a half-object.
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
+        // A chunk can end mid-line, so the last fragment is kept for the next read rather
+        // than parsed. Splitting and parsing everything would throw on a half-object.
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const event = JSON.parse(line) as { phase: string; answer?: unknown };
-        if (event.phase === "done") answer = AskResponse.parse(event.answer);
-        else onPhase(event.phase as AskPhase);
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as { phase: string; answer?: unknown };
+          if (event.phase === "done") answer = AskResponse.parse(event.answer);
+          else onPhase(event.phase as AskPhase);
+        }
       }
+    } catch (broken) {
+      // The answer is already in hand, so how the stream chose to end is not our
+      // business. Discarding a complete answer because the teardown of the connection
+      // that delivered it threw would be losing the thing we waited half a minute for —
+      // and the person is shown a failure for a request the server logged as a success.
+      if (answer === null) throw broken;
     }
 
     if (answer === null) {
@@ -225,7 +264,19 @@ async function askStreaming(
         `No answer within ${Math.round(TIMEOUT_MS.ask / 1000)}s.`,
       );
     }
-    throw new ApiError("unreachable", `Could not reach ${API_BASE_URL}.`);
+
+    const detail = error instanceof Error ? error.message : String(error);
+
+    // A response arrived, so the host is not the problem. Whatever went wrong happened to
+    // the stream or to what was in it, and saying "unreachable" here is a lie that points
+    // at the wrong thing.
+    if (connected) {
+      throw new ApiError("server", `The answer could not be read: ${detail}`);
+    }
+    throw new ApiError(
+      "unreachable",
+      `Could not reach ${API_BASE_URL} — ${detail}`,
+    );
   } finally {
     clearTimeout(timer);
   }

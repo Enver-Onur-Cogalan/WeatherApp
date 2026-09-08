@@ -16,7 +16,15 @@ import { useLiveQuery } from "drizzle-orm/expo-sqlite";
 import { db, schema } from "@/db/client";
 import type { AskResponse, Exchange } from "@/lib/ask";
 
-const KEEP = 20;
+/**
+ * docs/11's number, and its reasoning: enough to scroll back through a week of
+ * questions, "not enough to become a chat app with a retention policy".
+ *
+ * Exported because the screen says it out loud. At two or three questions a day the cap
+ * is reached in about a week, and after that every new question silently drops the
+ * oldest — which a person who has been using the app for a month has no way to know.
+ */
+export const KEEP = 20;
 
 export function useExchanges(): Exchange[] {
   const { data } = useLiveQuery(
@@ -34,6 +42,7 @@ export function useExchanges(): Exchange[] {
           id: row.id,
           question: row.question,
           response: JSON.parse(row.responseJson) as AskResponse,
+          createdAt: row.createdAt,
         };
       } catch {
         // A row written by an older version whose shape has since changed. Dropped from

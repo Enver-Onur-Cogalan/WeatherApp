@@ -11,10 +11,11 @@
  * nowhere, so it opens and works before anyone has done anything.
  */
 
+import { create } from "zustand";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SavedLocation as SavedLocationSchema } from "@weatherapp/schema";
 import * as SecureStore from "expo-secure-store";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import {
@@ -24,6 +25,7 @@ import {
 } from "@/db/locations";
 import { request } from "@/lib/api";
 import { locate, movedFar, permissionState, type Here } from "@/lib/here";
+import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { DEFAULT_LOCATION, TIMEOUT_MS } from "@/lib/config";
 import { uuidv7 } from "@/lib/uuid";
@@ -77,6 +79,46 @@ export const FALLBACK: SavedLocation = {
  */
 const SELECTED_KEY = "weatherapp.selected_location";
 
+/**
+ * Which place is chosen, shared by everything that asks.
+ *
+ * A store rather than `useState`, and that is the whole of the bug this replaces. Three
+ * screens call `useSelectedLocation` — İz, Sor and the list in Sen — and each one used to
+ * get its *own* copy of the id. Choosing Trabzon in Sen updated the list's copy, wrote the
+ * keystore, and left the other two holding whatever they had read when they mounted: the
+ * row showed Trabzon as selected while the forecast stayed on İzmir, and it only agreed
+ * with itself after a relaunch.
+ *
+ * Zustand for the same reason the session and the language use it: one value, many
+ * readers, and every reader re-renders when it changes.
+ */
+type SelectionState = {
+  selectedId: string | null;
+  /** False until the keystore answers, so nothing chooses a place on a guess. */
+  restored: boolean;
+  restore: () => Promise<void>;
+  select: (id: string) => void;
+};
+
+export const useSelection = create<SelectionState>((set) => ({
+  selectedId: null,
+  restored: false,
+  restore: async () => {
+    try {
+      set({ selectedId: await SecureStore.getItemAsync(SELECTED_KEY), restored: true });
+    } catch {
+      set({ selectedId: null, restored: true });
+    }
+  },
+  select: (id) => {
+    set({ selectedId: id });
+    void SecureStore.setItemAsync(SELECTED_KEY, id).catch(() => {
+      // The choice is lost at next launch and the first place is shown instead.
+      // Annoying, not broken.
+    });
+  },
+}));
+
 export function useLocations() {
   const signedIn = useAuth((state) => state.status === "signed-in");
   const local = useLocalLocations();
@@ -94,8 +136,12 @@ export function useLocations() {
       }),
   });
 
-  const saved = signedIn ? (remote.data ?? []) : local;
-  return { saved, isPending: signedIn && remote.isPending };
+  const saved = signedIn ? (remote.data ?? []) : local.locations;
+  // A guest's places are "pending" until SQLite has answered, which it does within the
+  // frame — but not *before* the first one. Reporting them as loaded while the list is
+  // still undefined is what let a caller act on an empty list that was never empty.
+  const isPending = signedIn ? remote.isPending : !local.loaded;
+  return { saved, isPending };
 }
 
 /**
@@ -106,24 +152,10 @@ export function useLocations() {
  */
 export function useSelectedLocation() {
   const { saved } = useLocations();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedId = useSelection((state) => state.selectedId);
+  const select = useSelection((state) => state.select);
 
-  useEffect(() => {
-    SecureStore.getItemAsync(SELECTED_KEY)
-      .then(setSelectedId)
-      .catch(() => setSelectedId(null));
-  }, []);
-
-  const selected =
-    saved.find((place) => place.id === selectedId) ?? saved[0] ?? FALLBACK;
-
-  const select = (id: string) => {
-    setSelectedId(id);
-    void SecureStore.setItemAsync(SELECTED_KEY, id).catch(() => {
-      // The choice is lost at next launch and the first place is shown instead.
-      // Annoying, not broken.
-    });
-  };
+  const selected = saved.find((place) => place.id === selectedId) ?? saved[0] ?? FALLBACK;
 
   return { selected, select, saved };
 }
@@ -232,14 +264,43 @@ export function fromPlace(place: Place): SavedLocation {
  * on every launch to receive the same answer.
  */
 export function useCurrentLocation() {
-  const { saved } = useLocations();
+  const language = useLanguage();
+  const { saved, isPending } = useLocations();
   const save = useSaveLocation();
+  const remove = useDeleteLocation();
   const [asking, setAsking] = useState(false);
 
-  const current = saved.find((place) => place.is_current) ?? null;
+  // The freshest of them, if the list somehow holds more than one. Ordering by
+  // `updated_at` rather than taking the first: the newest row carries the newest fix, and
+  // the reconciliation below keeps exactly the one this points at.
+  const currents = saved
+    .filter((place) => place.is_current)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const current = currents[0] ?? null;
+
+  /**
+   * One current location, which is what docs/12 says there may be.
+   *
+   * Repair rather than prevention, and it needs to be both. The launch race below created
+   * a *new* current row on every reload; fixing that stops the list growing and does
+   * nothing about the rows already in it. A person cannot clear them by hand either —
+   * before the race was fixed the row rewrote itself on the next launch, so deleting one
+   * only ever removed the oldest of a set that kept growing.
+   *
+   * Deliberately not folded into the write below. That path is guarded by `movedFar`, so
+   * on a phone sitting still it never runs — which is exactly the case where the
+   * duplicates are visible and nothing was clearing them.
+   */
+  useEffect(() => {
+    if (isPending || currents.length <= 1) return;
+    for (const place of currents.slice(1)) remove(place.id);
+    // `currents` is derived and a new array each render; its length is what matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPending, currents.length]);
 
   const apply = (here: Here) => {
     const now = new Date().toISOString();
+
     save({
       // The same record, updated. A new id each time would leave a trail of stale places
       // and lose whatever the person had selected.
@@ -255,12 +316,24 @@ export function useCurrentLocation() {
     });
   };
 
-  // Once per launch, silently, if we are already allowed.
+  /**
+   * Once per launch, silently, if we are already allowed.
+   *
+   * Held until the places have actually been read. It used to run on mount, when
+   * `useLiveQuery` had not answered yet and the list was `undefined` — so `current` was
+   * captured as null, the id below fell through to a fresh `uuidv7()`, and the device's
+   * location was *added* rather than updated. Every reload grew the list by one, which is
+   * how it was found: pressing `r` in Expo cloned the row each time.
+   */
+  const ran = useRef(false);
   useEffect(() => {
+    if (isPending || ran.current) return;
+    ran.current = true;
+
     let cancelled = false;
     void (async () => {
       if ((await permissionState()) !== "granted") return;
-      const here = await locate(false);
+      const here = await locate(false, language);
       if (cancelled || here === null) return;
       if (current !== null && !movedFar(here, current)) return;
       apply(here);
@@ -268,9 +341,10 @@ export function useCurrentLocation() {
     return () => {
       cancelled = true;
     };
-    // Deliberately once. Re-running as `saved` changes would fire on every write it makes.
+    // Once, after loading. Re-running as `saved` changes would fire on every write it
+    // makes; `ran` is what makes "once" survive the extra render that loading causes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isPending]);
 
   /**
    * The explicit ask, from a button someone pressed.
@@ -282,7 +356,7 @@ export function useCurrentLocation() {
   const detectHere = async (): Promise<boolean> => {
     setAsking(true);
     try {
-      const here = await locate(true);
+      const here = await locate(true, language);
       if (here === null) return false;
       apply(here);
       return true;

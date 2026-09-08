@@ -13,6 +13,7 @@
  * presented as though it had.
  */
 
+import { useCopy, useLanguage, type Copy, type Language } from "@/lib/i18n";
 import { useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -30,14 +31,13 @@ import * as Haptics from "expo-haptics";
 import Animated, { LinearTransition } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { forgetExchange, recordExchange, useExchanges } from "@/db/exchanges";
+import { KEEP, forgetExchange, recordExchange, useExchanges } from "@/db/exchanges";
 import { Failure } from "@/components/states";
 import { Thinking } from "@/components/thinking";
 import {
   formatProvenance,
   readingsOf,
-  SUGGESTIONS,
-  VERDICT_LABELS,
+  verdictLabel,
   type Exchange,
   type Reading,
 } from "@/lib/ask";
@@ -50,6 +50,7 @@ import { useAsk, type AskPhase } from "@/lib/queries";
 import { colors, radius, size, space, type } from "@/theme";
 
 export function AskScreen() {
+  const copy = useCopy();
   const [draft, setDraft] = useState("");
   // Read from SQLite rather than held in component state: history survived exactly as
   // long as the screen did before, which docs/11 lists as deletion by accident rather
@@ -74,6 +75,25 @@ export function AskScreen() {
 
   const toEnd = () =>
     requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
+
+  /**
+   * Open on the newest answer, not the oldest question.
+   *
+   * The thread only ever scrolled itself when a question was *sent*, so opening Sor put
+   * you at the top — which with a full history is about seven screens above the last
+   * thing the assistant said. Every thread in the world opens at the bottom; this one
+   * opened a week in the past, and read as clutter because of it.
+   *
+   * Once, and not animated: this is where the screen starts, not something it does.
+   * `settled` is only set after there is content to scroll to, because the live query
+   * answers a frame after the first render and the empty thread would otherwise claim it.
+   */
+  const settled = useRef(false);
+  const onFirstLayout = () => {
+    if (settled.current || exchanges.length === 0) return;
+    settled.current = true;
+    requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: false }));
+  };
 
   /**
    * Ask, either as a new turn or as a replacement for one.
@@ -125,7 +145,7 @@ export function AskScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Sor</Text>
+        <Text style={styles.title}>{copy.tabs.ask}</Text>
         <Text style={styles.local}>{selected.label} · yerel</Text>
       </View>
 
@@ -138,10 +158,18 @@ export function AskScreen() {
           ref={scroller}
           contentContainerStyle={styles.thread}
           keyboardDismissMode="interactive"
+          onContentSizeChange={onFirstLayout}
         >
           {empty ? <Empty onPick={send} place={selected.label} /> : null}
 
-          {exchanges.map((exchange) => (
+          {/* Said only once the cap is actually evicting something. Before that it would
+              be a policy nobody has run into; after it, it is the difference between a
+              limit and questions quietly going missing. */}
+          {exchanges.length >= KEEP ? (
+            <Text style={styles.retention}>{copy.ask.kept(KEEP)}</Text>
+          ) : null}
+
+          {exchanges.map((exchange, index) => (
             // `entering` and `exiting` on the turn rather than the card, so a question
             // and its answer arrive and leave as one thing — which is what they are.
             // `layout` closes the gap when one is deleted instead of the rest jumping.
@@ -152,13 +180,22 @@ export function AskScreen() {
               exiting={leave()}
               layout={LinearTransition.duration(220).easing(EASE_OUT)}
             >
+              {/* A week of questions is not one conversation. The rule goes where the day
+                  changed, which is the only structure a thread this long has. */}
+              {dayOf(exchange.createdAt) !== dayOf(exchanges[index - 1]?.createdAt) ? (
+                <View style={styles.dayRule}>
+                  <Text style={styles.dayLabel}>{dayLabel(exchange.createdAt, copy)}</Text>
+                  <View style={styles.dayLine} />
+                </View>
+              ) : null}
+
               {pending?.id === exchange.id ? (
                 <>
                   <Question text={pending.question} />
                   {ask.isError ? (
                     <Failure error={ask.error} onRetry={retry} />
                   ) : (
-                    <Thinking label={PHASES[ask.phase ?? "gathering"]} />
+                    <Thinking label={phaseLabel(ask.phase ?? "gathering", copy)} />
                   )}
                 </>
               ) : (
@@ -182,7 +219,7 @@ export function AskScreen() {
               {ask.isError ? (
                 <Failure error={ask.error} onRetry={retry} />
               ) : (
-                <Thinking label={PHASES[ask.phase ?? "gathering"]} />
+                <Thinking label={phaseLabel(ask.phase ?? "gathering", copy)} />
               )}
             </Animated.View>
           ) : null}
@@ -200,14 +237,12 @@ export function AskScreen() {
 }
 
 function Empty({ onPick, place }: { onPick: (question: string) => void; place: string }) {
+  const copy = useCopy();
   return (
     <View style={styles.empty}>
-      <Text style={styles.emptyLead}>
-        İz ekranının cevaplamadığı her şeyi buraya sorabilirsin. Cevaplar{" "}
-        {place} için, model cihazda çalışıyor — sorun hiçbir yere gitmiyor.
-      </Text>
-      <Text style={styles.emptyLabel}>Örnek sorular</Text>
-      {SUGGESTIONS.map((question) => (
+      <Text style={styles.emptyLead}>{copy.ask.intro(place)}</Text>
+      <Text style={styles.emptyLabel}>{copy.ask.examplesLabel}</Text>
+      {copy.ask.examples.map((question: string) => (
         <Pressable
           key={question}
           onPress={() => onPick(question)}
@@ -242,6 +277,7 @@ function Question({
   onCancelEdit?: () => void;
   onSubmitEdit?: (next: string) => void;
 }) {
+  const copy = useCopy();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(text);
   const [seenText, setSeenText] = useState(text);
@@ -270,13 +306,13 @@ function Question({
         <View style={styles.menu}>
           <IconAction
             icon="check"
-            label="Kaydet ve yeniden sor"
+            label={copy.ask.saveAndAsk}
             tone={changed ? "accent" : "quiet"}
             onPress={() => changed && onSubmitEdit?.(draft)}
           />
           <IconAction
             icon="close"
-            label="Vazgeç"
+            label={copy.common.cancel}
             onPress={() => {
               setDraft(text);
               onCancelEdit?.();
@@ -296,7 +332,7 @@ function Question({
         }}
         delayLongPress={350}
         accessibilityRole="button"
-        accessibilityHint="Uzun bas: kopyala veya düzenle"
+        accessibilityHint={copy.ask.longPressHint}
       >
         <Text style={[styles.question, open && styles.dimmed]}>{text}</Text>
       </Pressable>
@@ -305,7 +341,7 @@ function Question({
         <Animated.View style={styles.menuOver} entering={arrive()} exiting={leave()}>
           <IconAction
             icon="content-copy"
-            label="Kopyala"
+            label={copy.common.copy}
             onPress={() => {
               void Clipboard.setStringAsync(text);
               setOpen(false);
@@ -313,13 +349,13 @@ function Question({
           />
           <IconAction
             icon="pencil-outline"
-            label="Düzenle"
+            label={copy.common.edit}
             onPress={() => {
               setOpen(false);
               onEdit?.();
             }}
           />
-          <IconAction icon="close" label="Kapat" onPress={() => setOpen(false)} />
+          <IconAction icon="close" label={copy.ask.close} onPress={() => setOpen(false)} />
         </Animated.View>
       ) : null}
     </View>
@@ -382,11 +418,9 @@ function IconAction({
  * being asked again — a wait getting longer because the thing is being checked, not
  * because it is stuck, and worth saying so.
  */
-const PHASES: Record<AskPhase, string> = {
-  gathering: "Hava verisi alınıyor",
-  composing: "Cevap yazılıyor",
-  repairing: "Cevap kontrolden geçmedi, yeniden yazılıyor",
-};
+function phaseLabel(phase: AskPhase, copy: Copy): string {
+  return copy.ask.phases[phase];
+}
 
 /**
  * The answer, and what can be done with it.
@@ -402,6 +436,8 @@ const PHASES: Record<AskPhase, string> = {
  * of people.
  */
 function AnswerCard({ exchange }: { exchange: Exchange }) {
+  const copy = useCopy();
+  const language = useLanguage();
   const { answer } = exchange.response;
   const window = answer.best_window;
   const [open, setOpen] = useState(false);
@@ -423,16 +459,16 @@ function AnswerCard({ exchange }: { exchange: Exchange }) {
         {/* A factual question gets no verdict, and the card says nothing rather than
             inventing a label for it. "Yarın kaç derece?" is not good, mixed or bad. */}
         {answer.verdict ? (
-          <Text style={styles.verdict}>{VERDICT_LABELS[answer.verdict]}</Text>
+          <Text style={styles.verdict}>{verdictLabel(answer.verdict, language)}</Text>
         ) : null}
 
         {window ? (
           <>
             <View style={styles.window}>
-              <Text style={styles.windowDay}>{formatWindowDay(window)}</Text>
+              <Text style={styles.windowDay}>{formatWindowDay(window, language)}</Text>
               <Text style={styles.windowSpan}>{formatWindowSpan(window)}</Text>
             </View>
-            <Readings readings={readingsOf(window)} />
+            <Readings readings={readingsOf(window, language)} />
           </>
         ) : null}
 
@@ -453,29 +489,29 @@ function AnswerCard({ exchange }: { exchange: Exchange }) {
         <Animated.View style={styles.menuOver} entering={arrive()} exiting={leave()}>
           <IconAction
             icon="content-copy"
-            label="Kopyala"
+            label={copy.common.copy}
             onPress={() => {
-              void Clipboard.setStringAsync(asText(exchange));
+              void Clipboard.setStringAsync(asText(exchange, language));
               setOpen(false);
             }}
           />
           <IconAction
             icon="trash-can-outline"
-            label="Sil"
+            label={copy.common.delete}
             tone="destructive"
             onPress={() => void forgetExchange(exchange.id)}
           />
-          <IconAction icon="close" label="Kapat" onPress={() => setOpen(false)} />
+          <IconAction icon="close" label={copy.ask.close} onPress={() => setOpen(false)} />
         </Animated.View>
       ) : null}
 
-      <Text style={styles.provenance}>{formatProvenance(exchange.response)}</Text>
+      <Text style={styles.provenance}>
+        {formatProvenance(exchange.response, language)}
+      </Text>
 
       {/* An answer the engine wrote is labelled rather than passed off as the model's. */}
       {!exchange.response.from_model ? (
-        <Text style={styles.fellBack}>
-          Asistan cevap veremedi, bu yanıt skorlama motorundan.
-        </Text>
+        <Text style={styles.fellBack}>{copy.ask.fromEngine}</Text>
       ) : null}
     </View>
   );
@@ -492,6 +528,7 @@ function Composer({
   onSend: () => void;
   disabled: boolean;
 }) {
+  const copy = useCopy();
   return (
     <View style={styles.composer}>
       <TextInput
@@ -499,7 +536,7 @@ function Composer({
         value={value}
         onChangeText={onChange}
         onSubmitEditing={onSend}
-        placeholder="Bir şey sor"
+        placeholder={copy.ask.placeholder}
         placeholderTextColor={colors.inkDim}
         editable={!disabled}
         returnKeyType="send"
@@ -514,9 +551,9 @@ function Composer({
           (disabled || value.trim().length === 0) && styles.sendOff,
         ]}
         accessibilityRole="button"
-        accessibilityLabel="Gönder"
+        accessibilityLabel={copy.ask.send}
       >
-        <Text style={styles.sendText}>Sor</Text>
+        <Text style={styles.sendText}>{copy.ask.sendLabel}</Text>
       </Pressable>
     </View>
   );
@@ -552,13 +589,40 @@ function Readings({ readings }: { readings: Reading[] }) {
 }
 
 /** What lands on the clipboard: the question and the answer, not the card's chrome. */
-function asText(exchange: Exchange): string {
+/** The local calendar day an exchange belongs to, as a key rather than a label. */
+function dayOf(iso: string | undefined): string {
+  if (iso === undefined) return "";
+  const when = new Date(iso);
+  return `${when.getFullYear()}-${when.getMonth()}-${when.getDate()}`;
+}
+
+/**
+ * What to call that day.
+ *
+ * "Bugün" and "Dün" rather than a date, because for the two most recent days a name is
+ * what a person actually holds in their head. Older than that, the date is the only thing
+ * that means anything.
+ */
+function dayLabel(iso: string, copy: Copy): string {
+  const when = new Date(iso);
+  const now = new Date();
+
+  if (dayOf(iso) === dayOf(now.toISOString())) return copy.today;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (dayOf(iso) === dayOf(yesterday.toISOString())) return copy.ask.yesterday;
+
+  return `${copy.weekdays[when.getDay()]}, ${copy.card.date(when.getDate(), copy.months[when.getMonth()])}`;
+}
+
+function asText(exchange: Exchange, language: Language): string {
   const { answer } = exchange.response;
   const window = answer.best_window;
   return [
     exchange.question,
     "",
-    window ? `${formatWindowDay(window)} ${formatWindowSpan(window)}` : null,
+    window ? `${formatWindowDay(window, language)} ${formatWindowSpan(window)}` : null,
     answer.reason,
     ...answer.warnings,
   ]
@@ -567,6 +631,23 @@ function asText(exchange: Exchange): string {
 }
 
 const styles = StyleSheet.create({
+  retention: {
+    ...type.body,
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.inkDim,
+    textAlign: "center",
+    paddingBottom: space.sm,
+  },
+  dayRule: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    paddingBottom: space.xs,
+  },
+  dayLabel: { ...type.label, color: colors.inkDim },
+  dayLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.ruleSoft },
+
   readings: {
     flexDirection: "row",
     gap: space.lg,
