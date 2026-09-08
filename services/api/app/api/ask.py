@@ -55,6 +55,7 @@ async def ask(request: AskRequest, weather: WeatherDep, agent: AgentDep) -> AskR
         list(forecast.hours),
         to_domain_profile(request.profile),
         history=_history(request),
+        language=request.language,
     )
 
     logger.info(
@@ -164,6 +165,7 @@ async def ask_stream(
                 to_domain_profile(request.profile),
                 on_phase=queue.put_nowait,
                 history=_history(request),
+                language=request.language,
             )
         )
 

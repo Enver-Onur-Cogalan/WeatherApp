@@ -27,6 +27,19 @@ elif [ -f ../../.env ]; then
   set -a; . ../../.env; set +a
 fi
 
+# The root .env is the file `docker compose` reads, so its OLLAMA_BASE_URL is written from
+# inside a container. `host.docker.internal` does not resolve on the host, and the symptom
+# is not a startup error: the service comes up, /ready says "degraded", and every question
+# falls back to the engine with "assistant unreachable" — which reads as the model being
+# broken rather than the address being a container's.
+case "${OLLAMA_BASE_URL:-}" in
+  *host.docker.internal*)
+    OLLAMA_BASE_URL="${OLLAMA_BASE_URL//host.docker.internal/localhost}"
+    export OLLAMA_BASE_URL
+    echo "Ollama at ${OLLAMA_BASE_URL} (the .env address is the container's view)."
+    ;;
+esac
+
 if [ -z "${JWT_SECRET:-}" ]; then
   echo "JWT_SECRET is not set; generating an ephemeral one for this run."
   echo "Sessions will not survive a restart. Copy .env.example to .env for a stable one."

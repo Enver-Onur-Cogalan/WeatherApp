@@ -11,6 +11,7 @@ in `benchmarks/` rather than asserted here.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -21,13 +22,16 @@ from app.agent.orchestrator import Exchange, PlanningAgent
 from app.agent.provider import Completion, Message, ModelUnavailableError, ToolCall
 from app.agent.tools import TOOLS, ToolRunner
 from app.agent.validation import (
+    MAX_WARNING,
     coherent,
     conditions_grounded,
     free_of_machinery,
     grounded,
     in_scope,
     parse,
+    prune_warnings,
     repair_prompt,
+    right_language,
     weekdays_grounded,
 )
 from app.planning.models import Activity, ActivityProfile, ForecastHour
@@ -105,9 +109,21 @@ class ScriptedProvider:
         return self.fail_with is None
 
 
-def answer_json(reason: str, *, warnings: list[str] | None = None) -> str:
-    """What the model is asked for — judgement and prose, never the window."""
-    return ModelAnswer(verdict="good", reason=reason, warnings=warnings or []).model_dump_json()
+def answer_json(
+    reason: str, *, warnings: list[str] | None = None, window_index: int | None = 0
+) -> str:
+    """What the model is asked for: judgement, prose, and which window it means.
+
+    Never the window's figures — those come from the engine (ADR-0007). `window_index` is
+    an index into the ranked list, which is how a card came to disagree with the sentence
+    above it before the model got to choose (ADR-0017).
+    """
+    return ModelAnswer(
+        verdict="good",
+        reason=reason,
+        warnings=warnings or [],
+        window_index=window_index,
+    ).model_dump_json()
 
 
 class TestToolRunner:
@@ -233,17 +249,28 @@ class TestLongFormDatesAreNotMeasurements:
 
     def test_turkish_long_date_is_not_a_figure(self) -> None:
         answer = ModelAnswer(
-            verdict="good", reason="En iyi zaman 27 Ağustos Perşembe günü.", warnings=[]
+            verdict="good",
+            reason="En iyi zaman 27 Ağustos Perşembe günü.",
+            warnings=[],
+            window_index=None,
         )
         assert grounded(answer, {}).ok
 
     def test_english_long_date_is_not_a_figure(self) -> None:
-        answer = ModelAnswer(verdict="good", reason="The best time is August 27.", warnings=[])
+        answer = ModelAnswer(
+            verdict="good",
+            reason="The best time is August 27.",
+            warnings=[],
+            window_index=None,
+        )
         assert grounded(answer, {}).ok
 
     def test_an_unaccented_month_still_counts(self) -> None:
         answer = ModelAnswer(
-            verdict="good", reason="En iyi zaman 27 Agustos gunu.", warnings=[]
+            verdict="good",
+            reason="En iyi zaman 27 Agustos gunu.",
+            warnings=[],
+            window_index=None,
         )
         assert grounded(answer, {}).ok
 
@@ -253,6 +280,7 @@ class TestLongFormDatesAreNotMeasurements:
             verdict="good",
             reason="27 Ağustos günü sıcaklık 34 derece olacak.",
             warnings=[],
+            window_index=None,
         )
         assert not grounded(answer, {"temp": {21.0}}).ok
 
@@ -374,7 +402,10 @@ class TestCoherence:
     def test_a_bad_verdict_beside_a_high_scoring_window_is_rejected(self) -> None:
         response = parse(
             ModelAnswer(
-                verdict="bad", reason="Yeterli bilgi yok.", warnings=[]
+                verdict="bad",
+                reason="Yeterli bilgi yok.",
+                warnings=[],
+                window_index=None,
             ).model_dump_json()
         )
         assert response is not None
@@ -384,7 +415,12 @@ class TestCoherence:
     def test_a_mixed_verdict_beside_a_good_window_is_allowed(self) -> None:
         """A judgement may be cautious. It may not contradict the data."""
         response = parse(
-            ModelAnswer(verdict="mixed", reason="Sabah uygun.", warnings=[]).model_dump_json()
+            ModelAnswer(
+                verdict="mixed",
+                reason="Sabah uygun.",
+                warnings=[],
+                window_index=None,
+            ).model_dump_json()
         )
         assert response is not None
         window = ResponseWindow(day="2026-08-27", start_hour=6, end_hour=11, score=95.2)
@@ -392,7 +428,12 @@ class TestCoherence:
 
     def test_a_good_verdict_with_no_window_is_rejected(self) -> None:
         response = parse(
-            ModelAnswer(verdict="good", reason="Harika.", warnings=[]).model_dump_json()
+            ModelAnswer(
+                verdict="good",
+                reason="Harika.",
+                warnings=[],
+                window_index=None,
+            ).model_dump_json()
         )
         assert response is not None
         assert not coherent(response, None).ok
@@ -618,12 +659,20 @@ class TestRejectionNamesTheGate:
         assert answer.fell_back
         assert "grounded" in answer.fallback_reason
 
-    def test_every_gate_has_a_name(self) -> None:
-        """The names are paired with the checks positionally, so drift is silent."""
+    def test_every_name_is_a_gate_that_exists(self) -> None:
+        """The names are paired with the checks positionally, so drift is silent.
+
+        Asserting a count and one index was the first version of this, and adding a gate
+        broke it without finding anything: the position of a name is not the invariant.
+        What matters is that each name is a real check — a renamed gate leaves a label
+        pointing at nothing, and the rejection reason a person is shown is that label.
+        """
+        from app.agent import validation
         from app.agent.orchestrator import GATE_NAMES
 
-        assert len(GATE_NAMES) == 6
-        assert GATE_NAMES[1] == "free_of_machinery"
+        assert len(set(GATE_NAMES)) == len(GATE_NAMES), "a duplicated name mislabels one"
+        for name in GATE_NAMES:
+            assert callable(getattr(validation, name, None)), name
 
 
 class TestFallbackLanguage:
@@ -716,3 +765,224 @@ class TestToolDefinitions:
         """Descriptions longer than a couple of lines confuse a 4B model."""
         for tool in TOOLS:
             assert len(tool["function"]["description"]) <= 90
+
+
+class TestPruningAdvice:
+    """One unfounded warning used to cost the whole answer.
+
+    Measured against the running model: asked "Yarın sabah koşabilir miyim?" it answered
+    with an entirely grounded sentence — twenty-three degrees, three percent chance of
+    rain — and then advised an umbrella. `conditions_grounded` rejected the answer for
+    claiming rain, correctly, and fifteen seconds of correct prose went with it.
+    """
+
+    def _answer(self, reason: str, warnings: list[str]) -> ModelAnswer:
+        return ModelAnswer(verdict="good", reason=reason, warnings=warnings, window_index=0)
+
+    def test_an_unfounded_warning_is_dropped_and_the_answer_kept(self) -> None:
+        response, dropped = prune_warnings(
+            self._answer("Yarın sabah koşabilirsin.", ["Yağmur ihtimali var, şemsiye al."]),
+            codes={0, 1},
+            facts={},
+        )
+        assert response.warnings == []
+        assert dropped == ["Yağmur ihtimali var, şemsiye al."]
+        assert response.reason == "Yarın sabah koşabilirsin.", "the sentence survives"
+
+    def test_a_founded_warning_is_kept(self) -> None:
+        response, dropped = prune_warnings(
+            self._answer("Öğleden sonra yağmurlu.", ["Yağmur bekleniyor, şemsiye al."]),
+            codes={61},
+            facts={},
+        )
+        assert dropped == []
+        assert len(response.warnings) == 1
+
+    def test_only_the_offending_warning_goes(self) -> None:
+        """The others are independent sentences and are not made wrong by it."""
+        response, dropped = prune_warnings(
+            self._answer(
+                "Sabah uygun.",
+                ["UV yüksek, şapka tak.", "Kar yağacak, dikkat et."],
+            ),
+            codes={0},
+            facts={},
+        )
+        assert response.warnings == ["UV yüksek, şapka tak."]
+        assert dropped == ["Kar yağacak, dikkat et."]
+
+    def test_a_bad_reason_is_still_the_gate_s_business(self) -> None:
+        """Pruning does not launder the answer itself — only the advice beside it."""
+        response, dropped = prune_warnings(
+            self._answer("Yarın kar yağacak.", []), codes={0}, facts={}
+        )
+        assert dropped == []
+        assert not conditions_grounded(response, {0}).ok
+
+
+class TestRightLanguage:
+    """The language is chosen by the person now, so it can be checked rather than asked for.
+
+    Three Turkish scenarios in a full evaluation run came back in English while the model
+    was merely being *told* to match the question. Nothing looked at the answer.
+    """
+
+    def _answer(self, reason: str) -> ModelAnswer:
+        return ModelAnswer(verdict="good", reason=reason, warnings=[], window_index=0)
+
+    def test_an_english_answer_to_a_turkish_question_is_rejected(self) -> None:
+        verdict = right_language(
+            self._answer("The user asked about the weekend, but the data is for Tuesday."),
+            "tr",
+        )
+        assert not verdict.ok
+        assert "answered en" in verdict.reason
+
+    def test_a_turkish_answer_to_a_turkish_question_passes(self) -> None:
+        assert right_language(self._answer("Cumartesi sabahı uygun."), "tr").ok
+
+    def test_a_turkish_answer_without_diacritics_is_still_turkish(self) -> None:
+        """People type without them more often than not, and the detector knows the words."""
+        assert right_language(self._answer("Yarin sabah hava iyi olacak."), "tr").ok
+
+    def test_a_sentence_in_neither_vocabulary_is_not_rejected(self) -> None:
+        """The detector is crude by design. Only a positive detection of the *wrong*
+        language is a failure — treating "cannot tell" as one would throw away correct
+        short answers for being short."""
+        assert right_language(self._answer("Sunny until two."), "en").ok
+        assert right_language(self._answer("Sunny until two."), "tr").ok
+
+    def test_the_repair_names_the_language_to_answer_in(self) -> None:
+        """A retry told only that it was "rejected" repeats the drift."""
+        verdict = right_language(self._answer("Saturday morning is best."), "tr")
+        assert "Turkish" in repair_prompt(verdict)
+
+
+class TestAPercentageIsNotAClaim:
+    """Naming a condition's percentage reports the forecast; it does not predict weather.
+
+    Measured against the running model, and the second false positive this gate has had.
+    Asked "Yarın sabah koşabilir miyim?" it answered "Saat altıda sıcaklık yirmi üç derece
+    ve yağmur yüzdesi yüzde üç" — which says it will not rain, in the most informative way
+    available — and the gate rejected it for containing the word "yağmur". The whole
+    answer fell back to the engine, twice in a row, in a full evaluation run.
+
+    The first false positive was the denial ("yağmur yok"). Same shape, same lesson: the
+    gate asks whether a condition was *asserted*, and a word is not an assertion.
+    """
+
+    def _answer(self, reason: str) -> ModelAnswer:
+        return ModelAnswer(verdict="good", reason=reason, warnings=[], window_index=0)
+
+    def test_a_turkish_percentage_is_not_a_claim(self) -> None:
+        answer = self._answer("Sıcaklık yirmi üç derece ve yağmur yüzdesi yüzde üç.")
+        assert conditions_grounded(answer, {0, 1}).ok
+
+    def test_a_percent_sign_is_not_a_claim(self) -> None:
+        assert conditions_grounded(self._answer("Yağmur ihtimali %3."), {0, 1}).ok
+
+    def test_an_english_percentage_is_not_a_claim(self) -> None:
+        assert conditions_grounded(self._answer("Rain chance is 5 percent."), {0, 1}).ok
+
+    def test_an_unquantified_likelihood_is_still_a_claim(self) -> None:
+        """The line is the number. "Likely" makes a claim about weather the forecast does
+        not have; "three percent" makes a claim about the forecast itself."""
+        answer = self._answer("Yağmur ihtimali yüksek, şemsiye al.")
+        assert not conditions_grounded(answer, {0, 1}).ok
+
+    def test_a_plain_claim_still_fails(self) -> None:
+        assert not conditions_grounded(self._answer("Yarın yağmur yağacak."), {0, 1}).ok
+
+
+class TestTheContractCrossesToPython:
+    """One definition, two consumers, and for a while two different contracts.
+
+    `packages/schema` exists so the API's shape and the model's grammar cannot drift. The
+    generator undermined it quietly: constraints on an *array's items* were emitted for
+    Zod and dropped for Pydantic, so `{"type": "array", "items": {"type": "string",
+    "maxLength": 200}}` became `list[str]` on the server and `z.array(z.string().max(200))`
+    on the client.
+
+    The server then sent a 300-character warning that its own schema forbade, the client
+    refused to parse it, and the failure surfaced as "the server is unreachable" on a
+    request the server had logged as a success.
+    """
+
+    def _item_constraint(self, model: type, field: str, attribute: str) -> object:
+        """The constraint attached to a list field's *items*, not to the list."""
+        from typing import get_args
+
+        annotation = model.model_fields[field].annotation
+        item = get_args(annotation)[0]
+        metadata = get_args(item)[1]
+        return getattr(metadata, attribute)
+
+    def test_a_warning_is_capped_on_the_server_too(self) -> None:
+        from app.schemas.plan_response import PlanResponse
+
+        assert self._item_constraint(PlanResponse, "warnings", "max_length") == 200
+
+    def test_the_model_answer_carries_the_same_cap(self) -> None:
+        assert self._item_constraint(ModelAnswer, "warnings", "max_length") == 200
+
+    def test_the_constant_matches_the_contract(self) -> None:
+        """`parse` filters the raw payload before it becomes a model, so it repeats the
+        number. This is what stops the repeat from drifting."""
+        assert self._item_constraint(ModelAnswer, "warnings", "max_length") == MAX_WARNING
+
+    def test_an_hour_outside_the_day_is_refused(self) -> None:
+        """The same generator gap silently dropped this one: `preferred_hours` said its
+        items were 0–23 and the server accepted 99."""
+        import pytest
+        from pydantic import ValidationError
+
+        from app.schemas.activity_profile import ActivityProfile
+
+        with pytest.raises(ValidationError):
+            ActivityProfile(
+                activity="running",
+                temp_min=5,
+                temp_max=26,
+                wind_max_kmh=15,
+                precip_max_pct=20,
+                preferred_hours=[6, 99],
+                uv_max=6,
+            )
+
+
+class TestOverLongAdviceIsDropped:
+    """Constrained decoding does not enforce a maximum length.
+
+    Asked for advice (ADR-0017) the model wrote past the contract's 200 characters. The
+    whole answer used to be lost to it — first as an unparseable reply, then as a client
+    that refused the payload. One sentence of advice is the smaller thing to lose.
+    """
+
+    def test_a_long_warning_goes_and_the_answer_survives(self) -> None:
+        payload = json.dumps(
+            {
+                "verdict": "good",
+                "reason": "Sabah uygun.",
+                "warnings": ["x" * 201],
+                "window_index": 0,
+            }
+        )
+        answer = parse(payload)
+
+        assert answer is not None, "the answer is not thrown away with the advice"
+        assert answer.warnings == []
+        assert answer.reason == "Sabah uygun."
+
+    def test_a_warning_at_the_limit_is_kept(self) -> None:
+        payload = json.dumps(
+            {
+                "verdict": "good",
+                "reason": "Sabah uygun.",
+                "warnings": ["x" * 200],
+                "window_index": 0,
+            }
+        )
+        answer = parse(payload)
+
+        assert answer is not None
+        assert len(answer.warnings) == 1

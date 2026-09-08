@@ -137,6 +137,23 @@ system falls back to a **templated answer** built directly from the engine outpu
 less fluent, but correct. The user is never shown a broken response, and never told
 "something went wrong" when we have a perfectly good answer available.
 
+Seven gates run in practice, named in `GATE_NAMES` so a rejection can say which one
+spoke. Two of them arrived late and for reasons worth keeping:
+
+- **`right_language`** rejects an answer in a language the person did not ask for. This
+  is possible only because the language stopped being a guess — it is chosen in Sen and
+  sent with the question ([ADR-0018](./adr/ADR-0018-language-is-chosen-not-detected.md)).
+  While it was inferred, the model was merely *asked* to match the question and three
+  Turkish scenarios in a full run came back in English.
+- **Warnings are pruned rather than judged with the sentence.** Advice that rests on
+  weather the forecast does not contain is dropped on its own, because one unfounded
+  warning used to cost an entirely grounded answer
+  ([ADR-0017](./adr/ADR-0017-assistant-that-advises.md)). `reason` is still judged whole.
+
+The assistant also chooses which of the engine's ranked windows it is talking about, and
+says so in `window_index`, so the card beside the answer agrees with the sentence. It
+never chooses the window's *figures* — those are the engine's (ADR-0007).
+
 ## Thinking mode
 
 Gemma 4 supports a configurable thinking mode. We use it selectively:

@@ -17,9 +17,24 @@ import re
 from dataclasses import dataclass
 from datetime import date as date_type
 
+from app.agent.language import (
+    ENGLISH_WORDS,
+    NAMES,
+    TURKISH_LETTERS,
+    TURKISH_WORDS,
+    Language,
+)
 from app.agent.tools import TOOL_NAMES, Facts
+from app.core.logging import get_logger
 from app.schemas.agent_answer import AgentAnswer
 from app.schemas.plan_response import Window
+
+logger = get_logger(__name__)
+
+# The contract's own cap on one warning, repeated here because the raw payload is filtered
+# before it becomes a model. `test_agent.py` asserts the two agree — a literal that can
+# drift from the schema is how the client and server came to disagree in the first place.
+MAX_WARNING = 200
 
 # Matches integers and decimals, including a leading minus, but not the digits inside a
 # word like "H2O" — a bare number is what a claim about the weather looks like.
@@ -65,9 +80,32 @@ def parse(raw: str) -> AgentAnswer | None:
 
     Returning `None` rather than raising: an unparseable answer is a retry, and the
     caller already has a fallback that does not need an exception to find it.
+
+    Over-long advice is dropped before validating rather than failing the whole answer.
+    The contract caps a warning at 200 characters and constrained decoding does not
+    enforce a maximum length, so the model can and does write past it — asked for advice
+    (ADR-0017) it produced a 300-character sentence, which the client then refused to
+    parse. Losing one sentence of advice is a far smaller thing than losing an answer that
+    took half a minute to produce, and it is the same judgement `prune_warnings` makes
+    about advice that is not grounded.
     """
     try:
-        return AgentAnswer.model_validate_json(raw)
+        payload = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+
+    if isinstance(payload, dict) and isinstance(payload.get("warnings"), list):
+        kept = [
+            warning
+            for warning in payload["warnings"]
+            if not (isinstance(warning, str) and len(warning) > MAX_WARNING)
+        ]
+        if len(kept) != len(payload["warnings"]):
+            logger.info("agent.warning_too_long", dropped=len(payload["warnings"]) - len(kept))
+        payload["warnings"] = kept
+
+    try:
+        return AgentAnswer.model_validate(payload)
     except (ValueError, TypeError):
         return None
 
@@ -186,11 +224,29 @@ NEGATION_BEFORE = ("no", "not", "without", "little", "zero", "free of")
 # belonging to the next clause is not borrowed.
 NEGATION_WINDOW = 24
 
+# Naming a condition's *percentage* is reporting a figure, not claiming the weather.
+# "Yağmur yüzdesi yüzde üç" says it will not rain, in the most informative way available,
+# and the first version of this gate rejected the answer for containing the word.
+#
+# A percentage specifically, not any mention of likelihood: "yağmur ihtimali yüksek" makes
+# a claim about weather the forecast does not have, and should still fail. The figure
+# itself is then `grounded`'s business, which is the right division — this gate asks
+# whether a condition was asserted, not whether a number is real.
+PROBABILITY_MARKERS = ("yüzde", "%", "percent")
+
 
 def _is_denied(text: str, word: str, at: int) -> bool:
-    """Whether this occurrence says the condition is *absent*."""
+    """Whether this occurrence asserts the condition at all.
+
+    Two ways it does not. It can be **denied** — "yağmur yok", "no rain" — which Turkish
+    does after the noun and English before it, so both sides are examined. Or it can be
+    **quantified**, which is what a percentage does: a sentence that gives rain a number
+    is reporting the forecast rather than predicting weather.
+    """
     after = text[at + len(word) : at + len(word) + NEGATION_WINDOW]
     if any(marker in after for marker in NEGATION_AFTER):
+        return True
+    if any(marker in after for marker in PROBABILITY_MARKERS):
         return True
 
     before = text[max(0, at - NEGATION_WINDOW) : at]
@@ -334,6 +390,83 @@ def coherent(response: AgentAnswer, window: Window | None) -> Verdict:
     return Verdict(ok=True)
 
 
+def prune_warnings(
+    response: AgentAnswer, codes: set[int], facts: Facts
+) -> tuple[AgentAnswer, list[str]]:
+    """Drop advice that rests on weather the forecast does not contain.
+
+    The gates below judge an answer as one thing, and for `reason` that is right: a
+    sentence with an invented figure in it is not partly usable. Warnings are different.
+    They are independent sentences, so one bad one does not make the others wrong, and
+    rejecting the whole answer over it throws away a correct sentence and fifteen seconds.
+
+    Measured: asked "Yarın sabah koşabilir miyim?" the model answered "Yarın sabah
+    koşabilirsin. Saat altıda sıcaklık yirmi üç derece ve yağmur yüzdesi yüzde üç" —
+    entirely grounded — and then advised taking an umbrella. Three percent is not rain,
+    and the whole answer fell back to the engine because of the advice attached to it.
+    This is the cost ADR-0017 named: advice is a judgement, and a 4B model's judgement
+    about when a number is worth mentioning is not reliable. What *is* reliable is
+    checking the claim the advice makes, which is what this does.
+
+    Dropping rather than repairing, because nothing false reaches the person either way
+    and one of the two costs a person another wait. What is dropped is logged.
+    """
+    kept: list[str] = []
+    dropped: list[str] = []
+
+    for warning in response.warnings:
+        probe = response.model_copy(update={"reason": "", "warnings": [warning]})
+        if conditions_grounded(probe, codes).ok and grounded(probe, facts).ok:
+            kept.append(warning)
+        else:
+            dropped.append(warning)
+
+    if not dropped:
+        return response, []
+    return response.model_copy(update={"warnings": kept}), dropped
+
+
+def right_language(response: AgentAnswer, language: Language) -> Verdict:
+    """Whether the answer came back in the language it was asked for.
+
+    Until the client started sending one, the language was inferred from the question and
+    the model was asked to match it — a request nothing checked. It drifted: three
+    Turkish scenarios in a full evaluation run came back in English, and the only reason
+    anyone knew was that the suite looks. Now the language is chosen by the person, so it
+    is a fact rather than a guess, and a fact can be a gate.
+
+    Rejects only a *positive* detection of the wrong language. The detector is crude by
+    design and its confident answers are the trustworthy ones; treating "cannot tell" as
+    failure would reject correct short answers for being short.
+    """
+    spoken = _spoken(response.reason)
+    if spoken is None or spoken == language:
+        return Verdict(ok=True)
+    return Verdict(ok=False, reason=f"asked for {language}, answered {spoken}")
+
+
+def _spoken(text: str) -> Language | None:
+    """Which language a sentence is in, or None when it genuinely cannot tell.
+
+    `detect` answers the same question about a *question* and has to commit — a request
+    always gets an answer in some language, so it defaults to Turkish. Here a wrong guess
+    would throw away a correct answer, so the third outcome has to exist: "Sunny until
+    two" contains no word either list knows, and calling that Turkish would reject it.
+    """
+    if any(letter in text for letter in TURKISH_LETTERS):
+        return "tr"
+
+    words = {word for word in text.lower().replace("?", " ").split() if word}
+    turkish = len(words & TURKISH_WORDS)
+    english = len(words & ENGLISH_WORDS)
+
+    if turkish > english:
+        return "tr"
+    if english > turkish:
+        return "en"
+    return None
+
+
 def repair_prompt(verdict: Verdict) -> str:
     """What to tell the model when its answer failed.
 
@@ -346,6 +479,9 @@ def repair_prompt(verdict: Verdict) -> str:
             f"Your previous answer used figures that are not in the data: {listed}. "
             "Use only numbers that appear in the tool results, and do not estimate."
         )
+    if "asked for" in verdict.reason:
+        wanted = NAMES[verdict.reason.split("asked for ")[1].split(",")[0]]
+        return f"Your previous answer was in the wrong language. Answer again in {wanted}."
     if "internal name" in verdict.reason:
         return (
             f"Your previous answer was rejected: {verdict.reason}. Write for a person — "

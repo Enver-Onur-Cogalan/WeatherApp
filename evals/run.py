@@ -280,7 +280,11 @@ async def run_scenario(
     for _ in range(repeat):
         started = time.perf_counter()
         try:
-            answer = await agent.answer(scenario["question"], hours, profile)
+            # Told, not inferred. The app sends what the person chose in settings, so a
+            # run that let the server guess would be measuring a path nothing uses.
+            answer = await agent.answer(
+                scenario["question"], hours, profile, language=scenario.get("language")
+            )
         except ModelUnavailableError as exc:
             result.runs.append(
                 Run(

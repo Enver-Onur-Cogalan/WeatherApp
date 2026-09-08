@@ -18,6 +18,14 @@ from typing import Literal
 
 Language = Literal["tr", "en"]
 
+NAMES: dict[str, str] = {"tr": "Turkish", "en": "English"}
+"""What to call each language when instructing the model.
+
+In English, because the rest of the prompt is: a prompt that switches language partway
+is a prompt the model has to resolve before it can follow, and this one is fragile
+enough already (docs/04).
+"""
+
 # Letters that exist in Turkish and not in English. One is enough.
 TURKISH_LETTERS = frozenset("çğıöşüÇĞİÖŞÜ")
 

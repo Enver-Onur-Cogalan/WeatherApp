@@ -70,6 +70,7 @@ class StubAgent:
         self.hours_seen = 0
         self.history_seen: list[object] = []
         self.phases: list[str] = []
+        self.language_seen: str | None = None
 
     async def answer(
         self,
@@ -78,8 +79,10 @@ class StubAgent:
         profile: ActivityProfile,
         on_phase: object = None,
         history: list[object] | None = None,
+        language: str | None = None,
     ) -> AgentAnswer:
         self.asked.append(question)
+        self.language_seen = language
         self.hours_seen = len(hours)
         self.history_seen = list(history or [])
         if callable(on_phase):
@@ -142,6 +145,23 @@ class TestAsk:
         with client_with(StubWeather(build_forecast()), agent) as client:
             client.post("/ask", json=BODY)
         assert agent.asked == [BODY["question"]]
+
+    def test_the_chosen_language_reaches_the_agent(self) -> None:
+        """A preference, not a guess. The model used to be asked to match the question's
+        language and nothing checked that it had — three Turkish scenarios in a full
+        evaluation run came back in English."""
+        agent = StubAgent(an_answer())
+        with client_with(StubWeather(build_forecast()), agent) as client:
+            client.post("/ask", json={**BODY, "language": "en"})
+        assert agent.language_seen == "en"
+
+    def test_no_language_leaves_it_to_the_server(self) -> None:
+        """The endpoint is public: a caller that is not the app should not have to know
+        about a settings screen."""
+        agent = StubAgent(an_answer())
+        with client_with(StubWeather(build_forecast()), agent) as client:
+            client.post("/ask", json=BODY)
+        assert agent.language_seen is None
 
     def test_the_agent_is_handed_the_retrieved_forecast(self) -> None:
         agent = StubAgent(an_answer())

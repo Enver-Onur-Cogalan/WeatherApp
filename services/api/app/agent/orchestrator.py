@@ -24,7 +24,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.agent.language import Language, detect
+from app.agent.language import NAMES, Language, detect
 from app.agent.provider import Completion, Message, ModelUnavailableError, Provider
 from app.agent.tools import (
     TOOL_NAMES,
@@ -43,7 +43,9 @@ from app.agent.validation import (
     grounded,
     in_scope,
     parse,
+    prune_warnings,
     repair_prompt,
+    right_language,
     weekdays_grounded,
 )
 from app.core.logging import get_logger
@@ -58,6 +60,7 @@ logger = get_logger(__name__)
 
 GATE_NAMES = (
     "in_scope",
+    "right_language",
     "free_of_machinery",
     "coherent",
     "grounded",
@@ -113,11 +116,27 @@ Two prompts because the phases want opposite things. Phase one insists on tools;
 two must not know they exist.
 """
 
-STRUCTURE = (
-    "Answer using only the tool results above. Be specific: name the day and the hours, "
-    "and cite figures from the results. Do not mention weather that is not in them. "
-    "One or two sentences, in the same language as the question. Reply with JSON."
-)
+
+def _structure(language: Language) -> str:
+    """Phase two's instruction, in the shape the answer has to take.
+
+    The language is named rather than described. "In the same language as the question"
+    asks the model to do two things — identify the language, then write in it — and a 4B
+    model got the first one wrong often enough to be measured: three Turkish scenarios in
+    a full run came back in English. The person now chooses, so there is nothing to infer.
+    """
+    return (
+        "Answer using only the tool results above. Be specific: name the day and the hours, "
+        "and cite figures from the results. Do not mention weather that is not in them. "
+        "Set window_index to the position of the window you are talking about, counting from "
+        "0, or null if the answer is not about a window. "
+        "Say what it means for the person, not only what the numbers are: if the UV is high "
+        "say to cover up, if rain is likely say to take an umbrella, if it is hot say to go "
+        "earlier. Put that advice in warnings, one short sentence each, and leave warnings "
+        "empty when there is genuinely nothing to watch for. "
+        f"One or two sentences, written in {NAMES[language]}. Reply with JSON."
+    )
+
 
 NOTHING_GATHERED = (
     "(no tool results — answer only if the question can be answered without data)"
@@ -160,7 +179,7 @@ def _with_history(question: str, history: list[Exchange]) -> str:
     return f"{prior}\n\nNow asked: {question}"
 
 
-def _fold(question: str, results: list[tuple[str, str]]) -> str:
+def _fold(question: str, results: list[tuple[str, str]], language: Language) -> str:
     """Question, tool results and instruction as one user message.
 
     Measured rather than assumed. Handing results back as `role: "tool"` messages is the
@@ -173,7 +192,7 @@ def _fold(question: str, results: list[tuple[str, str]]) -> str:
     request succeeds and the model simply answers as though it had been given nothing.
     """
     body = "\n\n".join(f"Tool result ({name}):\n{payload}" for name, payload in results)
-    return f"{question}\n\n{body or NOTHING_GATHERED}\n\n{STRUCTURE}"
+    return f"{question}\n\n{body or NOTHING_GATHERED}\n\n{_structure(language)}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +223,7 @@ class PlanningAgent:
         profile: ActivityProfile,
         on_phase: Callable[[str], None] | None = None,
         history: list[Exchange] | None = None,
+        language: Language | None = None,
     ) -> AgentAnswer:
         """Answer a question, optionally saying what it is doing while it does it.
 
@@ -214,7 +234,10 @@ class PlanningAgent:
         """
         say = on_phase or (lambda _phase: None)
         started = time.perf_counter()
-        language = detect(question)
+        # Given by the client, which knows what the person chose. Inferred only when
+        # nothing was sent — the endpoint is public and a caller that is not the app
+        # should not have to know about a preference screen.
+        language = language or detect(question)
         runner = ToolRunner(hours, profile)
         # Figures the engine stands behind regardless of which tools the model chose,
         # so a correct answer is not rejected for citing one the model never asked for.
@@ -238,7 +261,11 @@ class PlanningAgent:
 
         # Ranked by the engine, before the model says anything about them.
         ranked, _ = plan(hours, profile)
-        window = _window_of(hours, ranked[0]) if ranked else None
+        # Every ranked window, so the model can say which one it means. Only the first was
+        # ever used before, attached to every answer whatever was asked — so "hafta sonu
+        # piknik yapılır mı?" produced prose about Saturday beside a card showing Monday,
+        # and two different questions produced the identical card (ADR-0017).
+        windows = [_window_of(hours, item) for item in ranked[:5]]
         codes = {hour.weather_code for hour in hours}
         dates = {local_date(hour) for hour in hours}
 
@@ -263,9 +290,10 @@ class PlanningAgent:
                 facts,
                 codes,
                 dates,
-                window,
+                windows,
                 elapsed,
                 called,
+                language,
                 say,
             )
         except ModelUnavailableError as exc:
@@ -344,9 +372,10 @@ class PlanningAgent:
         facts: Facts,
         codes: set[int],
         dates: set[str],
-        window: ResponseWindow | None,
+        windows: list[ResponseWindow],
         elapsed: Any,
         called: list[str],
+        language: Language,
         say: Callable[[str], None] = lambda _phase: None,
     ) -> tuple[AgentAnswer | None, str]:
         """Constrained decoding into the response schema, with one repair attempt.
@@ -363,7 +392,7 @@ class PlanningAgent:
         schema = ModelAnswer.model_json_schema()
         messages = [
             Message("system", COMPOSE_SYSTEM),
-            Message("user", _fold(question, gathered)),
+            Message("user", _fold(question, gathered, language)),
         ]
 
         rejection = "no attempt was made"
@@ -379,10 +408,27 @@ class PlanningAgent:
                 )
                 continue
 
+            # Advice that rests on weather the forecast does not have, removed before the
+            # gates rather than by them: one unfounded warning used to cost the whole
+            # answer, including a `reason` that was entirely grounded.
+            response, dropped = prune_warnings(response, codes, facts)
+            if dropped:
+                logger.info("agent.warning_dropped", attempt=attempt, dropped=dropped)
+
+            # The window the model said it was talking about — for the card only.
+            chosen = _chosen_window(response.window_index, windows)
+
             checks = (
                 in_scope(response),
+                right_language(response, language),
                 free_of_machinery(response),
-                coherent(response, window),
+                # The engine's best, not the model's pick. These are two questions and
+                # sharing one variable conflated them: `coherent` asks whether a "good"
+                # verdict agrees with what the engine found, and a model answering a
+                # factual question with `window_index: null` was being read as "nothing
+                # clears the profile" — so a correct answer was rejected for declining to
+                # point at a window.
+                coherent(response, windows[0] if windows else None),
                 grounded(response, facts),
                 conditions_grounded(response, codes),
                 weekdays_grounded(response, dates),
@@ -403,7 +449,7 @@ class PlanningAgent:
                 return AgentAnswer(
                     response=PlanResponse(
                         verdict=response.verdict,
-                        best_window=window,
+                        best_window=chosen,
                         reason=response.reason,
                         warnings=response.warnings,
                     ),
@@ -519,6 +565,21 @@ class PlanningAgent:
             fell_back=True,
             fallback_reason=reason,
         )
+
+
+def _chosen_window(index: int | None, windows: list[ResponseWindow]) -> ResponseWindow | None:
+    """The window the answer is about.
+
+    `None` from the model means the answer is not about a window at all — a factual
+    question, or small talk — and the card then shows none, which is honest. An index past
+    the end is a model slip rather than an intention, and the best window is a better
+    recovery than an empty card.
+    """
+    if not windows:
+        return None
+    if index is None:
+        return None
+    return windows[index] if 0 <= index < len(windows) else windows[0]
 
 
 def _window_of(hours: list[ForecastHour], window: Any) -> ResponseWindow:
