@@ -51,6 +51,70 @@ equal.
 
 ---
 
+### B3 — One schema, two contracts — **fixed 2026-09-08**
+
+The symptom appeared on the wrong side of the wire and cost an evening. A phone reported
+that the server was unreachable while the server's own log recorded the same request as a
+success, with a real answer from the model in 21.8 seconds.
+
+`packages/schema` exists so the API's shape and the model's grammar cannot drift. The
+generator undermined it quietly: it applied the constraints of a *field* and never those
+of an **array's items**, so `{"type": "array", "items": {"type": "string", "maxLength":
+200}}` became `list[str]` in Python while Zod kept `z.array(z.string().max(200))`. The
+server was therefore free to send a warning its own schema forbade, and once the model
+was asked for advice (ADR-0017) it did.
+
+Two things hid it. The client's streaming path wrapped the request, the stream, the JSON
+and the schema in one `try` whose `catch` called all of it "unreachable" and discarded
+the real error — so the diagnosis pointed at a working network. And the same generator
+gap had silently dropped a second rule nobody had noticed: `preferred_hours` declared its
+items to be hours of a day and the server accepted 99.
+
+Both are fixed, and the error card now carries the underlying message. It was that
+message — a Zod issue naming `answer.warnings.0` — that found the cause in one reading.
+
+### B4 — Choosing a place did nothing — **fixed 2026-09-09**
+
+Picking Trabzon in Sen marked the row as selected and left the forecast on İzmir until
+the next launch.
+
+`useSelectedLocation` held the chosen id in `useState`, so each of the three screens that
+call it — İz, Sor and the list in Sen — got its **own copy**. Selecting wrote the keystore
+and updated the list's copy; the other two kept whatever they had read when they mounted.
+It is a store now, like the session and the language, and the tabs wait for it so nothing
+fetches a forecast for a place nobody chose.
+
+### B5 — The device's location cloned itself on every launch — **fixed 2026-09-09**
+
+Found by pressing `r` in Expo and watching Yerler grow by one row each time.
+
+The effect that keeps the current location up to date ran on mount, when `useLiveQuery`
+had not answered and the list was `undefined`. It captured `current` as null, the id fell
+through to a fresh `uuidv7()`, and the place was *added* rather than updated. An unread
+list and an empty list are different answers and now say so.
+
+The first fix was incomplete in an instructive way: the cleanup went inside the write
+path, which is guarded by distance and never runs on a phone sitting still — exactly the
+case where the duplicates are visible. Repair and prevention needed to be separate.
+
+### B6 — Lightning never struck on 96 or 99 — **fixed 2026-09-09**
+
+The atmosphere asked `condition === "storm"` when it wanted to know whether to draw
+lightning. A condition names what *falls*, which makes 96 and 99 correctly `hail` — so
+the two loudest codes in the set drew hail out of a silent sky. Thunder is orthogonal to
+the falling body and is asked as its own question now.
+
+### B7 — Snow fell as rain — **fixed 2026-09-09**
+
+A flake was measured as `length(dx, travel)`, where `dx` is a fraction of one **column**
+and `travel` a fraction of the **height**. At the forty-odd columns heavy precipitation
+asks for, the horizontal axis was compressed some forty times against the vertical: the
+flake came out about half a pixel wide and twenty tall, which is a streak, which is rain.
+
+Rain wants a streak, so the fault never showed there — it was only visible in the one
+mode that needed a round body. Verified by rendering the shader to a PNG through
+CanvasKit rather than by looking at a phone.
+
 ## Polish
 
 ### P1 — A loading state that belongs to this app — **done 2026-09-03**
@@ -110,6 +174,31 @@ separate.
 remove reads as lag rather than as polish.
 
 ---
+
+### P6 — The gate was a form with a title on it — **done 2026-09-08**
+
+The first screen anybody sees was the least considered surface in the app, which is the
+wrong way round for the most graphics-heavy thing in this repository.
+
+The tempting fix is ruled out: ADR-0013 keeps the atmosphere only while it encodes data,
+and the gate has no place, no forecast and possibly no server. So it borrows the
+instrument instead of the weather — the name is scorched onto a recorder card by a
+travelling point of light, once, on arrival. A curve would have been the obvious choice
+and is the one thing that cannot go there, for the reason P1 already recorded.
+
+Controls came out of the same pass and are now shared. Every button was a bordered box
+with a ten-pixel label and no answer to being touched; they react on press-in rather than
+on release, because that is the latency a person actually perceives.
+
+### P7 — There was nothing between the gate and the app — **done 2026-09-09**
+
+A tour, three cards on a turning drum, shown once and repeatable from Sen.
+
+Its first version named the three tabs — the one thing a person finds in two taps — while
+the app's actual claim went unmentioned. It explains the product now: that the line on İz
+is not temperature. Each card shows the app in real weather, which needed
+[ADR-0019](./adr/ADR-0019-atmosphere-as-specimen.md), since running the atmosphere on a
+specimen is a case ADR-0013 did not anticipate.
 
 ## Features
 
@@ -192,6 +281,46 @@ states, five failure kinds are named separately, and the retry is only offered w
 could plausibly help.
 
 ---
+
+### F5 — The interface speaks one language — **done 2026-09-08**
+
+CLAUDE.md has always said the app is bilingual. Every string was Turkish and there was no
+mechanism for a second language at all.
+
+One typed dictionary, no library: `en` is declared as `typeof tr`, so a missing key is a
+compile error rather than a key name appearing on screen in front of somebody. The
+language is not a display preference — it is sent with every question, and the server
+checks the answer against it (ADR-0018).
+
+Finding the strings by their diacritics missed seven of them, because "Tekrar dene" has
+none. Searching by shape instead — every literal inside a `<Text>`, every `label=` and
+`placeholder=` — found the rest, and is the check to repeat.
+
+### F6 — The thread opened a week in the past — **done 2026-09-09**
+
+Reported as clutter after a month of use, and the cause was not accumulation: history has
+always been capped at twenty. The thread only ever scrolled itself when a question was
+*sent*, so opening Sor put you about seven screens above the last answer.
+
+It opens on the newest answer now, turns are ruled by day, and the cap is stated once it
+is actually evicting something — at two or three questions a day it is reached in about a
+week, and after that every new question silently drops the oldest.
+
+### F7 — The atmosphere never read temperature, and had no sun — **done 2026-09-09**
+
+Five fields went into the layer and none of them separated minus ten from forty-two, in
+an app whose entire question is whether somebody should be outside. Heat is drawn as
+rising air low in the frame, above about 28°C; cold draws nothing, because there is no
+optical phenomenon of cold air and inventing one would be ornament.
+
+The sky also had no sun. It drew stars, cloud, rain, snow, hail, fog, wind and lightning,
+and not the one object everybody looks for. The sun and the moon travel the arc
+`elevation` already describes, read sideways, and both are hidden by anything but a clear
+or partly clouded sky. The moon's first version had a *fixed* height and slid across on a
+rail — half the cycle it was supposed to draw.
+
+Freezing rain became its own condition in the same pass. The engine had hard-excluded 56,
+57, 66 and 67 from the start; only the client called them rain.
 
 ### P4 — 00:00 and 23:00 were nearly untouchable — **fixed 2026-09-05**
 **Where:** İz, the 24-hour trace.
@@ -352,10 +481,19 @@ knows about weather?** Everything so far answers the first. D2 is the second.
 ## Still open
 
 - Nothing here is scheduled. The order is a separate decision from the list.
-- Everything except the two decisions is done. B1 and P1 landed early; the rest went in
-  one pass on 2026-09-05.
-- **D1 and D2 are still open, and both need a call rather than an implementation.** They
-  are the only items left in this document.
+- Everything except D2 is done. B1 and P1 landed early, most of the rest went in one pass
+  on 2026-09-05, and B3–B7 with P6, P7 and F5–F7 followed on 2026-09-08 and 09.
+- **D2 is the only item left that needs a call rather than an implementation.** The
+  question underneath it moved, though: ADR-0017 answered "an assistant that knows about
+  weather" for the Sor tab, which is half of what D2 asks for. What is still undecided is
+  how many threads there are, not what one thread does.
+- **Every defect fixed on 2026-09-08 and 09 was found by using the app, not by a test.**
+  B3 took an evening because the error had been thrown away before anyone could read it;
+  B4 and B5 were visible only on a device across two launches. There is still no test
+  file under `apps/mobile`, and that is now the largest single gap in this project.
+- B7 was the first defect here diagnosed by rendering a shader to a PNG through CanvasKit
+  rather than by looking at a phone. `check-shaders` already had the machinery; nothing
+  had used it to *see* an image. Worth making a proper script rather than a throwaway.
 - P1 turned up a latent defect of its own: a shader that fails to compile returns `null`,
   and `<Shader>` accepts null silently, so a typo draws nothing and reports nothing. All
   four shaders now go through `compileShader()`, which throws, and CI compiles them

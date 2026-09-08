@@ -6,11 +6,11 @@ outside it. The visual language for all of this is [doc 10](./10-design-language
 ## The graph
 
 ```
-first launch ──► Onboarding ──┐
-                              │
-cold start ───────────────────┤
-widget tap ───────────────────┤
-notification ─────────────────┤
+first launch ──► Kapı ──► Tur ──┐
+                                │
+cold start ─────────────────────┤
+widget tap ─────────────────────┤
+notification ───────────────────┤
                               ▼
                         ┌───────────┐
                         │    İz     │  ◄── the planner's output lives here
@@ -48,33 +48,45 @@ notification that opens the app to the wrong hour is worse than no notification.
 
 ## Onboarding
 
-Four steps, and every one of them can be skipped or fails soft.
+Two steps, in this order: the gate, then the tour.
 
 ```
-1  Karşılama      One sentence: what this does that a weather app does not.
-                  → "Başla"
+1  Kapı     Hesap aç · Giriş yap · Hesapsız devam et
+            Answered once and remembered (ADR-0009). Reached again from Sen,
+            where it gains a way back because the app is behind it.
 
-2  Konum          Permission, with the reason stated before the system dialog.
-                  → Denied or "Şimdi değil" continues to a city search.
-                     The app is fully usable without location permission.
-
-3  Profil         "Ne yapmayı seviyorsun?" — free text.
-                     "Sabahları koşarım, 26 derecenin üstünde çıkmam, rüzgâr sevmem"
-                  → ActivityProfile extracted, shown as editable fields, confirmed.
-                  → "Kendim ayarlayayım" is always visible, and is the whole path
-                     when the assistant is unreachable.
-
-4  Hesap          Kayıt ol · Giriş yap · Misafir devam et
+2  Tur      Three cards on a turning drum, shown once and repeatable from Sen.
+            "Ne zaman?" · "Sınırları sen koy" · "Sor, yeter"
 ```
 
-**Step 3 is the product's first impression**, and the only place the model appears before
-a user has asked it anything. Two rules hold it together:
+The gate comes first because the tour explains the three tabs of an app somebody has not
+yet agreed to use. Nothing makes a guest silently: the flag is set by pressing the guest
+button, by signing in, or by having done one of those before.
 
-- **The extraction is confirmed, never silently saved.** A misread profile would poison
-  every plan afterwards, invisibly.
-- **The assistant is not a dependency.** If Ollama is unreachable the free-text field is
-  replaced by the manual form with a one-line explanation. Onboarding cannot be the one
-  place the app hard-requires a model.
+**The tour explains the product, not the furniture.** Its first version named the three
+tabs, which is the one thing a person finds in two taps, and it spent their attention on
+the least valuable thing it knew. What actually needs saying is that the line on İz is
+*not temperature* — it is how well each hour suits what they want to do. Nobody discovers
+that by tapping. Each card shows the app in real weather, which is the one place the
+atmosphere layer is allowed to run on a specimen
+([ADR-0019](./adr/ADR-0019-atmosphere-as-specimen.md)).
+
+### Built, and what is not
+
+The four-step flow this section used to describe was never built, and two of its steps
+are not coming back in that form.
+
+**Location is not asked for during onboarding.** A permission dialog before anyone has
+asked the app for anything is the behaviour that teaches people to refuse. It is offered
+in Sen, behind a button somebody presses, and after that it keeps itself current
+silently.
+
+**There is no free-text profile extraction.** No endpoint for it exists — the API is
+`/plan`, `/ask`, `/places`, `/profiles`, `/locations` and auth, and nothing parses a
+sentence into an `ActivityProfile`. İz opens on three built-in profiles and Sen edits
+them as fields. The idea is still a good one and the schema still describes profiles as
+extracted once and confirmed; what is written down here is that it does not exist, so
+nobody reads this page and believes it does.
 
 ## İz
 
@@ -160,9 +172,15 @@ For anything the main screen does not answer. Deliberately not the front door �
 - **An engine answer is labelled.** When the model was unreachable, asked for nothing, or
   produced something that failed validation, the card says so in a line beneath it. The
   answer is still correct; presenting it as the model's would not be.
-- **History is kept for the session and the last twenty exchanges**, stored locally and
-  never synced. Enough to scroll back to yesterday's answer; not enough to become a chat
-  app with a retention policy.
+- **History is kept for the last twenty exchanges**, stored locally and never synced.
+  Enough to scroll back to yesterday's answer; not enough to become a chat app with a
+  retention policy. The thread **opens on the newest answer** — it used to scroll itself
+  only when a question was sent, so a full history opened about seven screens into the
+  past, which read as clutter rather than as the wrong starting point. Turns are ruled by
+  day, because twenty questions spanning a week are not one conversation. And the cap is
+  stated once it is actually evicting something: at two or three questions a day it is
+  reached in about a week, and after that every new question silently drops the oldest,
+  which somebody using the app for a month has no way to discover.
 - **Assistant unreachable**: the input is disabled with the reason and a link to
   Sen → Asistan. The rest of the app is untouched.
 
@@ -183,11 +201,11 @@ answers, and the token-by-token arrival docs/10 describes needs SSE on both ends
 
 | Row | Contains |
 |---|---|
-| **Profiller** | List, create, edit, delete. Editing offers the same free-text path as onboarding |
+| **Profiller** | List, create, edit, delete, as fields |
 | **Konumlar** | Saved places, reorder, add by search, current-location toggle |
 | **Bildirimler** | Rain alerts and window alerts, per profile, with quiet hours |
 | **Asistan** | Reachability, model name, endpoint, atmosphere quality tier |
-| **Görünüm** | Units, language, theme |
+| **Dil** | Türkçe or English, for the interface and for the assistant's answers |
 | **Hesap** | Sign in / out, or upgrade a guest account |
 | **Veri ve gizlilik** | Export everything, delete everything |
 
@@ -195,6 +213,18 @@ answers, and the token-by-token arrival docs/10 describes needs SSE on both ends
 self-hosted software, so a person needs to see whether the model is reachable, which one
 is answering, and where it lives. When something is wrong, this is where the app has
 already told them to go.
+
+### Built, and what is not
+
+**Profiller**, **Konumlar**, **Dil** and **Hesap** exist, along with a row that replays
+the tour. **Bildirimler**, **Asistan** and **Veri ve gizlilik** do not — the table above
+is the design and this sentence is the state of it.
+
+**Dil is not a display preference.** It is sent with every question, and the server both
+names it in the model's instruction and rejects an answer that comes back in the other
+language ([ADR-0018](./adr/ADR-0018-language-is-chosen-not-detected.md)). A language that
+was inferred could not be checked, because the check and the guess would have shared a
+word list.
 
 ## Guest to account
 
@@ -380,9 +410,17 @@ Twenty rows, oldest evicted, and never uploaded even when an account exists.
 
 - **Transitions.** Tab changes, sheet presentation, and the shared element between a
   ranked window and the trace are undesigned.
+- **Nothing on the mobile side is tested.** The three defects this page now describes as
+  fixed — a per-component selection, a location record that cloned itself on every
+  launch, a thread that opened a week in the past — were all found by using the app on a
+  device. There is no test file under `apps/mobile`.
 - **Widget layout.** The trace may not fit at widget size; a reduced form is needed, and
   it must still deep-link to the right day.
 - **Icon set.** The instrument direction points at plotted marks rather than pictograms,
   but nothing has been drawn.
-- **First-run without any network at all.** Onboarding currently assumes a forecast can be
-  fetched at least once. What the app shows before it ever has data is unspecified.
+- **First-run without any network at all.** The gate and the tour work offline — the tour
+  draws its own specimens — but what İz shows before it has ever held a forecast is still
+  unspecified.
+- **The tour is shown once and never again unless asked for.** Whether that is right for
+  a tour that now carries the app's only explanation of what the trace plots is untested;
+  nobody has watched a first-time user read it.
