@@ -1,3 +1,6 @@
+import { useCopy, useLanguageStore } from "@/lib/i18n";
+import { useSelection } from "@/lib/locations";
+import { useTour } from "@/lib/onboarding";
 import {
   Archivo_400Regular,
   Archivo_600SemiBold,
@@ -60,6 +63,29 @@ export default function RootLayout() {
     void restore();
   }, [restore]);
 
+  // The chosen language, from the keystore. Not gated on the way the session is: the
+  // device's locale is already a reasonable answer, so the app opens in it and switches
+  // if the stored preference disagrees — a splash held for one string read would cost
+  // more than the flicker it prevents.
+  const restoreLanguage = useLanguageStore((state) => state.restore);
+  useEffect(() => {
+    void restoreLanguage();
+  }, [restoreLanguage]);
+
+  // Whether the tour has run. The tabs layout waits on this before deciding anything,
+  // so it is read once here rather than by the screen that would be redirected away.
+  const restoreTour = useTour((state) => state.restore);
+  useEffect(() => {
+    void restoreTour();
+  }, [restoreTour]);
+
+  // Which place the app is about. Read here so that no screen renders — and no forecast
+  // is fetched — for a place the person did not choose.
+  const restoreSelection = useSelection((state) => state.restore);
+  useEffect(() => {
+    void restoreSelection();
+  }, [restoreSelection]);
+
   const [ready, error] = useFonts({
     Archivo_400Regular,
     Archivo_600SemiBold,
@@ -103,6 +129,7 @@ export default function RootLayout() {
           >
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="welcome" options={{ animation: "fade" }} />
+            <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
           </Stack>
         </ThemeProvider>
       </QueryClientProvider>
@@ -119,14 +146,11 @@ export default function RootLayout() {
  * what would throw away the profiles the rule exists to protect.
  */
 function StorageFailure({ error }: { error: Error }) {
+  const copy = useCopy();
   return (
     <View style={failureStyles.root}>
-      <Text style={failureStyles.title}>Cihaz veritabanı açılamadı</Text>
-      <Text style={failureStyles.detail}>
-        Uygulama yerel kaydını güncelleyemedi. Kayıtlı profillerini kaybetmemek için
-        kendiliğinden onarmıyoruz — uygulamayı silip yeniden kurmak sorunu çözer ama yerel
-        profilleri de siler.
-      </Text>
+      <Text style={failureStyles.title}>{copy.database.title}</Text>
+      <Text style={failureStyles.detail}>{copy.database.body}</Text>
       <Text style={failureStyles.technical}>{error.message}</Text>
     </View>
   );

@@ -3,9 +3,9 @@
  *
  * Three ways in, and the third is a first-class one. ADR-0009 says guest mode exists
  * because the first person to open this project will not create an account to look
- * around and should not have to — so "Misafir olarak devam et" is not a small link under
- * a form, and the screen says plainly what an account is *for* rather than implying that
- * skipping it costs anything.
+ * around and should not have to — so "carry on without an account" is not a small link
+ * under a form, and the screen says plainly what an account is *for* rather than implying
+ * that skipping it costs anything.
  *
  * The choice is remembered. A gate that reappears every launch is the wall the ADR was
  * written against; being asked once is fine, being asked forever is not.
@@ -15,11 +15,19 @@
  * here with the app still underneath, so a way back appears — the same screen, one
  * affordance different, rather than two screens that must be kept in step.
  *
- * No atmosphere layer here, deliberately. It would look good and it is the app's most
- * distinctive surface — but ADR-0013 defines it as a second reading of the forecast
- * rather than decoration, and on this screen there is no location, no forecast, and
- * possibly no server. Drawing weather that stands for nothing is exactly what that ADR
- * rules out, so the gate is typography on the instrument's own ground.
+ * **What it looks like, and why it is not weather.** This was a form with a title on it,
+ * which is the wrong first impression for the most graphics-heavy app in this repository.
+ * The obvious fix — put the atmosphere layer behind it — is ruled out by ADR-0013, which
+ * keeps that layer only while it encodes real data, and here there is no place, no
+ * forecast and possibly no server. Drawing a sky that stands for nothing is precisely
+ * what that decision refuses.
+ *
+ * So the screen borrows the *instrument* rather than the weather: the name is scorched
+ * onto a recorder card by a travelling point of light, once, on arrival. A curve would
+ * have been the tempting choice and is the one thing that cannot go here — `thinking.tsx`
+ * records why, having already learned that a surface drawing the same shape the week
+ * cards draw with real data stops reading as an instrument and starts reading as a
+ * forecast. Letterforms cannot be misread that way.
  */
 
 import { router } from "expo-router";
@@ -31,14 +39,18 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BurnIn } from "@/components/burn-in";
+import { Button, Field } from "@/components/controls";
 import { moveProfilesToAccount, pendingProfiles } from "@/db/handoff";
 import { AuthError, useAuth } from "@/lib/auth";
-import { colors, radius, size, space, type } from "@/theme";
+import { copyFor, useCopy, useLanguage, type Language } from "@/lib/i18n";
+import { arrive } from "@/lib/motion";
+import { colors, size, space, type } from "@/theme";
 
 /** docs/07: length is what matters, so the only rule is a floor, and it is stated. */
 const MIN_PASSWORD = 10;
@@ -46,6 +58,7 @@ const MIN_PASSWORD = 10;
 type Mode = "choose" | "in" | "up" | "handoff";
 
 export function WelcomeScreen() {
+  const copy = useCopy();
   const chosenGuest = useAuth((state) => state.chosenGuest);
   const status = useAuth((state) => state.status);
   const [mode, setMode] = useState<Mode>("choose");
@@ -70,14 +83,11 @@ export function WelcomeScreen() {
           <ScrollView
             contentContainerStyle={styles.scroll}
             keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
           >
             <View style={styles.masthead}>
-              <Text style={styles.eyebrow}>Hava, planlanabilir</Text>
-              <Text style={styles.wordmark}>WeatherApp</Text>
-              <Text style={styles.lede}>
-                Ne zaman dışarı çıkacağını söyleyen bir asistan. Model senin sunucunda
-                çalışıyor — sorduğun hiçbir şey başka bir yere gitmiyor.
-              </Text>
+              <BurnIn text="WeatherApp" size={40} />
+              <Text style={styles.lede}>{copy.welcome.pitch}</Text>
             </View>
 
             {mode === "choose" ? (
@@ -114,6 +124,7 @@ function Choose({
 }) {
   const continueAsGuest = useAuth((state) => state.continueAsGuest);
   const [busy, setBusy] = useState(false);
+  const copy = useCopy();
 
   const asGuest = async () => {
     setBusy(true);
@@ -122,48 +133,34 @@ function Choose({
   };
 
   return (
-    <View style={styles.stack}>
-      <Pressable
-        onPress={() => onPick("up")}
-        style={styles.primary}
-        accessibilityRole="button"
-      >
-        <Text style={styles.primaryText}>Hesap aç</Text>
-      </Pressable>
-
-      <Pressable
+    <Animated.View style={styles.stack} entering={arrive()}>
+      <Button label={copy.welcome.signUp} onPress={() => onPick("up")} />
+      <Button
+        label={copy.welcome.signIn}
         onPress={() => onPick("in")}
-        style={styles.secondary}
-        accessibilityRole="button"
-      >
-        <Text style={styles.secondaryText}>Giriş yap</Text>
-      </Pressable>
+        variant="secondary"
+      />
 
       <View style={styles.rule} />
 
-      <Pressable
-        onPress={asGuest}
-        disabled={busy}
-        style={[styles.guest, busy && styles.dim]}
-        accessibilityRole="button"
-      >
-        <Text style={styles.guestText}>Misafir olarak devam et</Text>
-      </Pressable>
-      <Text style={styles.guestNote}>
-        Uygulamanın tamamı hesapsız çalışır. Profillerin ve konumların yalnızca bu
-        cihazda kalır; hiçbir şey sunucuya gitmez.
-      </Text>
-      <Text style={styles.guestNote}>
-        Hesap açmak, bunları sunucuna kaydeder — telefonunu değiştirsen de durur, ikinci
-        cihazından da açılır. Sonradan da açabilirsin.
+      <Button
+        label={copy.welcome.asGuest}
+        onPress={() => void asGuest()}
+        variant="quiet"
+        busy={busy}
+      />
+      {/* Two sentences, not four. What stays on the phone, and what an account changes. */}
+      <Text style={styles.note}>
+        <Text style={styles.noteLead}>{copy.welcome.guestTitle} </Text>
+        {copy.welcome.guestBody}
       </Text>
 
       {dismissable ? (
         <Pressable onPress={onDismiss} style={styles.dismiss} accessibilityRole="button">
-          <Text style={styles.dismissText}>Vazgeç</Text>
+          <Text style={styles.dismissText}>{copy.common.cancel}</Text>
         </Pressable>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -183,6 +180,8 @@ function Credentials({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const copy = useCopy();
+  const language = useLanguage();
 
   const tooShort = password.length > 0 && password.length < MIN_PASSWORD;
   const ready = email.includes("@") && password.length >= MIN_PASSWORD && !busy;
@@ -195,59 +194,55 @@ function Credentials({
       await (mode === "in" ? signIn(email, password) : signUp(email, password));
       await onDone();
     } catch (error) {
-      setFailure(describe(error, mode));
+      setFailure(describe(error, mode, language));
     } finally {
       setBusy(false);
     }
   };
 
+  const title = mode === "in" ? copy.welcome.signIn : copy.welcome.signUp;
+
   return (
-    <View style={styles.stack}>
-      <Text style={styles.formTitle}>{mode === "in" ? "Giriş yap" : "Hesap aç"}</Text>
+    <Animated.View style={styles.stack} entering={arrive()}>
+      <Text style={styles.formTitle}>{title}</Text>
 
       <Field
-        label="E-posta"
+        label={copy.welcome.email}
         value={email}
         onChange={setEmail}
-        placeholder="ornek@site.com"
+        placeholder={copy.welcome.emailPlaceholder}
         keyboardType="email-address"
         autoComplete="email"
+        returnKeyType="next"
         autoFocus
       />
       <Field
-        label="Parola"
+        label={copy.welcome.password}
         value={password}
         onChange={setPassword}
-        placeholder={`En az ${MIN_PASSWORD} karakter`}
+        placeholder={copy.welcome.passwordPlaceholder(MIN_PASSWORD)}
         secureTextEntry
         autoComplete={mode === "in" ? "current-password" : "new-password"}
-      />
-
-      {tooShort ? (
+        returnKeyType="go"
+        onSubmitEditing={() => void submit()}
         // Said while typing rather than after submitting. docs/10 wants a control to say
         // what will happen, and a rule you only learn by failing is the opposite of that.
-        <Text style={styles.hint}>
-          Parola en az {MIN_PASSWORD} karakter. Uzunluk önemli, karakter çeşidi değil.
-        </Text>
-      ) : null}
+        hint={tooShort ? copy.welcome.passwordHint(MIN_PASSWORD) : null}
+      />
 
       {failure !== null ? <Text style={styles.failure}>{failure}</Text> : null}
 
-      <Pressable
-        onPress={submit}
+      <Button
+        label={busy ? "…" : title}
+        onPress={() => void submit()}
         disabled={!ready}
-        style={[styles.primary, !ready && styles.dim]}
-        accessibilityRole="button"
-      >
-        <Text style={styles.primaryText}>
-          {busy ? "…" : mode === "in" ? "Giriş yap" : "Hesap aç"}
-        </Text>
-      </Pressable>
+        busy={busy}
+      />
 
       <Pressable onPress={onBack} style={styles.dismiss} accessibilityRole="button">
-        <Text style={styles.dismissText}>Geri</Text>
+        <Text style={styles.dismissText}>{copy.welcome.back}</Text>
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -264,6 +259,7 @@ function Handoff({ onDone }: { onDone: () => void }) {
   const [count, setCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ moved: number; failed: number } | null>(null);
+  const copy = useCopy();
 
   useEffect(() => {
     void pendingProfiles().then((profiles) => setCount(profiles.length));
@@ -278,44 +274,37 @@ function Handoff({ onDone }: { onDone: () => void }) {
 
   if (result !== null) {
     return (
-      <View style={styles.stack}>
+      <Animated.View style={styles.stack} entering={arrive()}>
         <Text style={styles.formTitle}>
-          {result.failed === 0 ? "Taşındı" : "Kısmen taşındı"}
+          {result.failed === 0 ? copy.welcome.movedTitle : copy.welcome.partlyMovedTitle}
         </Text>
-        <Text style={styles.guestNote}>
-          {result.moved} profil hesabına kaydedildi.
-          {result.failed > 0
-            ? ` ${result.failed} tanesi gönderilemedi — cihazda duruyor, Sen sekmesinden tekrar deneyebilirsin.`
-            : ""}
+        <Text style={styles.note}>
+          {copy.welcome.moved(result.moved)}
+          {result.failed > 0 ? copy.welcome.failedToMove(result.failed) : ""}
         </Text>
-        <Pressable onPress={onDone} style={styles.primary} accessibilityRole="button">
-          <Text style={styles.primaryText}>Devam et</Text>
-        </Pressable>
-      </View>
+        <Button label={copy.welcome.carryOn} onPress={onDone} />
+      </Animated.View>
     );
   }
 
   return (
-    <View style={styles.stack}>
-      <Text style={styles.formTitle}>Bu cihazdaki profiller</Text>
-      <Text style={styles.guestNote}>
-        Misafirken {count ?? "…"} profil oluşturmuşsun. Hesabına taşıyalım mı? Taşırsan
-        başka cihazdan da açılır. Taşımazsan bu telefonda kalmaya devam eder.
+    <Animated.View style={styles.stack} entering={arrive()}>
+      <Text style={styles.formTitle}>{copy.welcome.onThisDevice}</Text>
+      <Text style={styles.note}>
+        {copy.welcome.offer(count === null ? "…" : String(count))}
       </Text>
 
-      <Pressable
-        onPress={move}
-        disabled={busy || count === null}
-        style={[styles.primary, (busy || count === null) && styles.dim]}
-        accessibilityRole="button"
-      >
-        <Text style={styles.primaryText}>{busy ? "Taşınıyor…" : "Hesabıma taşı"}</Text>
-      </Pressable>
+      <Button
+        label={busy ? copy.you.moving : copy.you.moveToAccount}
+        onPress={() => void move()}
+        disabled={count === null}
+        busy={busy}
+      />
 
       <Pressable onPress={onDone} style={styles.dismiss} accessibilityRole="button">
-        <Text style={styles.dismissText}>Şimdilik kalsın</Text>
+        <Text style={styles.dismissText}>{copy.welcome.keepForNow}</Text>
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -323,57 +312,27 @@ function Handoff({ onDone }: { onDone: () => void }) {
  * A failure, in words a person can act on.
  *
  * The server refuses to say whether an address exists (docs/07), so the wrong-credentials
- * message covers both cases and must not imply otherwise — a friendlier "böyle bir hesap
- * yok" would leak exactly what the endpoint is careful to protect.
+ * message covers both cases and must not imply otherwise — a friendlier "no such account"
+ * would leak exactly what the endpoint is careful to protect.
  */
-function describe(error: unknown, mode: "in" | "up"): string {
-  if (!(error instanceof AuthError)) {
-    return "Beklenmeyen bir sorun oldu. Tekrar dene.";
-  }
+function describe(error: unknown, mode: "in" | "up", language: Language): string {
+  const copy = copyFor(language).welcome;
+  if (!(error instanceof AuthError)) return copy.unexpected;
+
   switch (error.status) {
     case 0:
-      return "Sunucuya ulaşılamadı. Backend çalışıyor mu ve aynı ağda mısın, kontrol et.";
+      return copy.unreachable;
     case 401:
-      return "E-posta veya parola hatalı.";
+      return copy.wrongCredentials;
     case 409:
-      return "Bu adreste zaten bir hesap var. Giriş yapmayı dene.";
+      return copy.accountExists;
     case 422:
-      return mode === "up"
-        ? `Adres geçerli bir e-posta olmalı, parola en az ${MIN_PASSWORD} karakter.`
-        : "Girilen bilgiler kabul edilmedi.";
+      return mode === "up" ? copy.invalid(MIN_PASSWORD) : copy.refused;
     case 429:
-      return "Çok fazla deneme oldu. Birkaç dakika bekle.";
+      return copy.tooMany;
     default:
-      return "Sunucu bu isteği tamamlayamadı. Tekrar dene.";
+      return copy.serverFailed;
   }
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  ...input
-  // `onChange` is omitted deliberately: TextInput has one of its own that takes an event,
-  // and spreading both leaves a prop that must satisfy two incompatible shapes.
-}: {
-  label: string;
-  value: string;
-  onChange: (text: string) => void;
-} & Omit<React.ComponentProps<typeof TextInput>, "onChange" | "value">) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        {...input}
-        value={value}
-        onChangeText={onChange}
-        style={styles.input}
-        placeholderTextColor={colors.inkDim}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -384,43 +343,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingTop: space.xxl,
     paddingBottom: space.xl,
+    // The name at the top, the choice under the thumb. Everything between is the
+    // argument for making it.
     justifyContent: "space-between",
     gap: space.xxl,
   },
 
-  masthead: { gap: space.sm },
-  eyebrow: { ...type.label, color: colors.burnHi },
-  wordmark: { ...type.display, fontSize: 34, lineHeight: 40, color: colors.ink },
+  masthead: { gap: space.md },
   lede: {
     ...type.body,
     fontSize: size.body,
-    lineHeight: 23,
+    lineHeight: 24,
     color: colors.ink2,
-    marginTop: space.xs,
+    // Under 80 characters a line, which at this size is most of the width anyway.
+    maxWidth: 420,
   },
 
   stack: { gap: space.md },
-  formTitle: { ...type.label, color: colors.burnHi, marginBottom: space.xs },
-
-  primary: {
-    alignItems: "center",
-    paddingVertical: space.md + 2,
-    borderRadius: radius.md,
-    backgroundColor: colors.burnWash,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.burn,
-  },
-  primaryText: { ...type.label, color: colors.burnHi },
-
-  secondary: {
-    alignItems: "center",
-    paddingVertical: space.md + 2,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.rule,
-    backgroundColor: colors.surface,
-  },
-  secondaryText: { ...type.label, color: colors.ink2 },
+  formTitle: { ...type.heading, fontSize: size.title, color: colors.ink },
 
   rule: {
     height: StyleSheet.hairlineWidth,
@@ -428,27 +368,12 @@ const styles = StyleSheet.create({
     marginVertical: space.xs,
   },
 
-  guest: { alignItems: "center", paddingVertical: space.md },
-  guestText: { ...type.label, color: colors.ink },
-  guestNote: { ...type.body, fontSize: 12, lineHeight: 18, color: colors.inkDim },
+  note: { ...type.body, fontSize: size.caption, lineHeight: 20, color: colors.inkDim },
+  /** The claim, in the reading ink; the detail behind it stays quiet. */
+  noteLead: { color: colors.ink2 },
 
-  field: { gap: space.xs },
-  fieldLabel: { ...type.label, color: colors.inkDim },
-  input: {
-    ...type.body,
-    fontSize: size.caption,
-    color: colors.ink,
-    backgroundColor: colors.ground2,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.rule,
-    borderRadius: radius.md,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm + 2,
-  },
-  hint: { ...type.body, fontSize: 12, lineHeight: 17, color: colors.inkDim },
-  failure: { ...type.body, fontSize: 12, lineHeight: 17, color: colors.ember },
+  failure: { ...type.body, fontSize: size.caption, lineHeight: 19, color: colors.ember },
 
-  dismiss: { alignItems: "center", paddingVertical: space.sm },
+  dismiss: { alignSelf: "center", paddingVertical: space.sm, paddingHorizontal: space.md },
   dismissText: { ...type.label, color: colors.inkDim },
-  dim: { opacity: 0.4 },
 });
