@@ -189,16 +189,72 @@ rather than replacing it.
 
 ## Motion
 
-Three moments. Everything else holds still.
+Two rules, and every animation in the app is one or the other. **Motion reports an
+action** — a press, a scrub, a swipe, a page arriving — or it is **one orchestrated
+moment** that plays once and stops. Nothing loops, and nothing moves on a screen somebody
+is reading.
 
 | Trigger | What happens | Why it earns its place |
 |---|---|---|
 | On open | The trace draws left to right, burns igniting as the pen passes | One orchestrated sequence, and it is the instrument metaphor in a single gesture |
 | On scrub | Four readings update continuously | Tabular figures mean the row never reflows, so the eye can hold one number |
 | On activity switch | The trace morphs into a different landscape | The product's thesis, demonstrated |
+| On press | A control scales to 0.97 in 110ms, and returns | On press-*in*, because that is the latency a person actually perceives. The scale carries the label with it, which is what makes it read as an object rather than a colour change |
+| On focus | A field's rule takes the burn | The recorder's own event: light arrives and leaves a mark. Nothing else in the app uses that colour at rest, so a lit rule can only mean "this is where you are typing" |
+| On arrival at the gate | The wordmark is scorched onto the card | See below |
+| On swiping the tour | The card turns on a drum, and its title burns as it lands | The barograph writes on a rotating drum, so a swipe turns the instrument rather than sliding a slide |
 
-`prefers-reduced-motion` removes all three **without removing information**: the trace
-appears complete, the atmosphere renders a single frame, values still update on scrub.
+`prefers-reduced-motion` removes them **without removing information**: the trace appears
+complete, the atmosphere renders a single frame, the wordmark and the titles are already
+burnt, and values still update on scrub. Reduced means fewer and gentler, not absent.
+
+## The gate, and the controls it needed
+
+The first screen anybody sees was, for a long time, the least considered surface in the
+app — a form with a title on it, which is the wrong way round for the most graphics-heavy
+thing in this repository.
+
+The obvious fix is ruled out. Putting the atmosphere behind it would look good and it is
+the app's most distinctive surface, but ADR-0013 keeps that layer only while it encodes
+data, and the gate has no place, no forecast and possibly no server. Drawing a sky that
+stands for nothing is exactly what that decision refuses.
+
+So the gate borrows the **instrument** rather than the weather. A Campbell–Stokes recorder
+focuses sunlight through a glass sphere and burns the sunny hours into a printed card;
+here the light writes the name instead. The unburnt letters are part of the card's ruling
+— visible, cold, not yet a mark — and a travelling point of focus scorches them once, on
+arrival.
+
+**A curve is the one thing that cannot go there.** `thinking.tsx` learned it already: a
+surface drawing the same shape the week cards draw with real data stops reading as an
+instrument and starts reading as a forecast. Letterforms cannot be misread that way.
+
+The controls came out of the same pass, because the problem was not one screen's styling.
+Every button in the app was a bordered box with a ten-pixel label and no answer to being
+touched, and on a phone that is most of how an interface feels built. Three variants now:
+the scorch filled for the one thing a screen wants, ruling for an equal alternative, and a
+quiet third that is still a real button — never a link, since ADR-0009 makes carrying on
+without an account a first-class choice.
+
+## The tour
+
+Three cards on a turning drum. The drum is not a flourish: the barograph writes on a
+rotating one, so a swipe turns the instrument.
+
+**Cards rather than pages**, at about three quarters of the screen, so the next one shows
+at the edge. Full-width pages hide their neighbours, and a tour whose shape you cannot see
+until you reach the end has no shape. This also settles the angle. A three-sided drum
+steps 120° between faces, which is what the geometry wants — and a face turned the whole
+120° is past edge-on and facing away, so the neighbour a person was meant to see
+disappears. What anyone actually sees of a prism is the front face and two others
+foreshortened, so the faces turn 62° and stay visible.
+
+Each card shows the app **in real weather**: snow at midday, a thunderstorm at midnight, a
+clear evening just before the sun reaches zero, when the horizon still takes the burn and
+the stars are already out. This is the one surface allowed to run the atmosphere on a
+specimen ([ADR-0019](./adr/ADR-0019-atmosphere-as-specimen.md)). The instrument's marks
+stay in front of it, which is this document's own relationship drawn: weather happens *to*
+the instrument, and the sky is the paper the trace is printed on.
 
 ## Copy
 
@@ -211,7 +267,17 @@ Words are design material. The rules we hold to:
 - **An empty screen is an invitation to act.** When no window clears the profile, we name
   the constraint that cost the most hours and offer to relax it — the scoring engine
   already knows, so withholding it would be waste.
-- **Turkish and English are equals.** Neither is a translation layer over the other.
+- **Turkish and English are equals.** Neither is a translation layer over the other, and
+  since 2026-09-08 that is true of the code as well as the intention.
+- **Say the benefit, not the architecture.** The gate used to promise that "the model runs
+  on your own server", which is a sentence about deployment in a place reserved for a
+  person's reasons. What is left of it that they can use is that nothing they ask leaves
+  the phone. The same rule retired the tour's first draft, which explained the three tabs
+  — the one thing anybody finds in two taps.
+- **Strings that take a value are functions, not templates with holes.** Turkish
+  agglutinates and English does not, so "%20" against "20%" and "5 Eylül" against
+  "September 5" cannot be assembled from shared parts. The sentence is written twice, and
+  writing it as a function is what makes that obvious rather than surprising.
 
 ## States
 
@@ -296,3 +362,8 @@ shader runs and nothing about what it draws.
 - Icon set. The instrument direction suggests plotted marks over pictograms, but this has
   not been designed.
 - Widget layout, which has to survive at a size where the trace may not fit.
+- **The tour runs three shader stacks at once**, on top of a cost ADR-0013 flagged and
+  nobody has profiled. The quality tier is still undesigned and is now more overdue.
+- **Nothing checks that a screen reads from the dictionary.** The type system guarantees
+  the two languages have the same keys; a string written straight into a component would
+  not be noticed by anything. Searching by shape found seven that had been missed once.
