@@ -16,8 +16,11 @@
  */
 
 import {
+  Blur,
   Canvas,
+  Circle,
   Fill,
+  Group,
   LinearGradient,
   Rect,
   Shader,
@@ -30,7 +33,7 @@ import { useDerivedValue } from "react-native-reanimated";
 
 import { compileShader } from "@/lib/shader";
 import { css, elevation, FADE_AT, skyStops } from "@/lib/sky";
-import { conditionFor, type Condition } from "@/lib/weather-code";
+import { conditionFor, hasThunder, type Condition } from "@/lib/weather-code";
 import { colors } from "@/theme";
 
 /**
@@ -46,7 +49,7 @@ uniform float2 u_resolution;
 uniform float  u_time;
 uniform float  u_intensity;  // 0..1
 uniform float  u_slant;      // -1..1, from wind
-uniform float  u_mode;       // 0 rain, 1 snow, 2 hail, 3 fog
+uniform float  u_mode;       // 0 rain, 1 snow, 2 hail, 3 fog, 4 freezing
 uniform float  u_fade;       // fraction of height at which the layer is gone
 
 float hash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -60,7 +63,9 @@ half4 main(float2 xy) {
 
     // Fog is sheets, not bodies: slow horizontal bands at different rates, which is
     // where its depth comes from.
-    if (u_mode > 2.5) {
+    // Banded rather than open-ended: an open test owns every mode above it, so the first
+    // one added after fog silently became fog.
+    if (u_mode > 2.5 && u_mode < 3.5) {
         float band = 0.0;
         for (float i = 0.0; i < 4.0; i += 1.0) {
             float y = 0.16 + i * 0.13;
@@ -84,7 +89,7 @@ half4 main(float2 xy) {
     // than fainter ones — thinning by opacity looks like fog, not like light rain.
     if (seed > u_intensity * 0.95 + 0.05) { return half4(0.0); }
 
-    float speed = u_mode < 0.5 ? 1.6 : (u_mode < 1.5 ? 0.28 : 2.3);
+    float speed = u_mode < 0.5 ? 1.6 : (u_mode < 1.5 ? 0.28 : (u_mode < 2.5 ? 2.3 : 2.0));
     float phase = fract(seed * 7.13 + u_time * speed * (0.75 + seed * 0.5));
 
     float cellX = fract(x * columns);
@@ -97,19 +102,38 @@ half4 main(float2 xy) {
         : 0.0;
     float dx = cellX - 0.5 + sway;
 
+    // A round body has to be measured in pixels, not in the two different normalised
+    // spaces its coordinates arrive in. dx is a fraction of one column and travel is a
+    // fraction of the height, so at the forty-odd columns heavy precipitation asks for,
+    // the horizontal axis is compressed some forty times against the vertical. Snow drawn
+    // as length(dx, travel) therefore came out about half a pixel wide and twenty tall --
+    // a streak, which is to say rain. Rain wants a streak, so it never showed the fault.
+    float pxX = (dx / columns) * u_resolution.x;
+
     float body;
     if (u_mode < 0.5) {
         body = smoothstep(0.06, 0.0, abs(dx)) * smoothstep(0.16, 0.0, travel);
     } else if (u_mode < 1.5) {
-        float d = length(float2(dx, (travel - 0.05) * 1.6));
-        body = smoothstep(0.055, 0.0, d);
+        // A flake: round, and the same size whatever the density, because snow does not
+        // get finer when there is more of it.
+        float d = length(float2(pxX, (travel - 0.05) * u_resolution.y));
+        body = smoothstep(2.6, 0.4, d);
+    } else if (u_mode < 2.5) {
+        // A pellet: smaller, harder edged, and falling fast enough to be a short dash.
+        float d = length(float2(pxX, (travel - 0.03) * u_resolution.y * 0.75));
+        body = smoothstep(2.0, 0.9, d);
     } else {
-        float d = length(float2(dx, (travel - 0.03) * 1.15));
-        body = smoothstep(0.035, 0.012, d);
+        // Freezing rain: a needle. Rain's streak, cut to half its length and drawn hard
+        // at the edges, because what separates it from rain on a screen is not the fall
+        // but the glassiness -- and a short bright stroke is what glass looks like.
+        body = smoothstep(0.035, 0.0, abs(dx)) * smoothstep(0.075, 0.0, travel);
     }
 
+    // Ice reads colder than water. The tint is the only cue a still frame has, since
+    // freezing rain falls exactly like the rain it is.
+    half3 tint = u_mode > 3.5 ? half3(0.62, 0.82, 0.90) : half3(0.84, 0.90, 0.97);
     float a = body * fade * (0.34 + 0.5 * u_intensity);
-    return half4(half3(0.84, 0.90, 0.97) * a, a);
+    return half4(tint * a, a);
 }`)!;
 
 /**
@@ -349,6 +373,59 @@ half4 main(float2 xy) {
     return half4(half3(0.94, 0.96, 1.0) * a, a);
 }`)!;
 
+/**
+ * Heat, as the air above hot ground.
+ *
+ * Temperature was the one forecast field the layer never read. Five inputs went in --
+ * hour, code, precipitation, wind, cloud -- and none of them separates minus ten from
+ * forty-two, in an app whose entire question is whether a person should be outside. A day
+ * that is dangerous to run in looked exactly like a pleasant one.
+ *
+ * Drawn as a shimmer band low in the frame rather than a tint over everything, because
+ * that is where the effect actually is: air rising off ground that the sun has been on.
+ * A runtime shader here cannot refract what is painted beneath it -- there is no backdrop
+ * to sample -- so this is the shimmer itself, warm and thin, rather than a distortion of
+ * the sky behind it.
+ *
+ * Cold gets nothing, deliberately. There is no optical phenomenon of cold air to draw,
+ * and inventing one would be the ornament ADR-0013 refuses. Cold is already in the sky
+ * palette and in the numbers.
+ */
+const HEAT = compileShader(
+  "heat",
+  `
+uniform float2 u_resolution;
+uniform float  u_time;
+uniform float  u_amount;  // 0..1, from temperature
+uniform float  u_fade;    // where the sky meets the ground
+
+half4 main(float2 xy) {
+    float2 uv = xy / u_resolution;
+
+    // Just under the horizon, falling off in both directions.
+    float band = smoothstep(0.22, 0.0, abs(uv.y - (u_fade - 0.07)));
+    if (band <= 0.0) { return half4(0.0); }
+
+    // Columns, vertical and wavering. The first version mixed height into the phase,
+    // which leaned them over and drew light beams rather than air -- heat rises straight
+    // and wobbles, so the height belongs in the horizontal offset and nowhere else.
+    float wob = sin(uv.y * 26.0 + u_time * 2.1) * 0.013
+              + sin(uv.y * 41.0 - u_time * 1.5) * 0.008;
+    float x = uv.x + wob;
+
+    float a1 = sin(x * 36.0 + u_time * 0.85);
+    float a2 = sin(x * 59.0 - u_time * 0.62);
+    // Squared, so the field is wisps with gaps between them rather than an even ripple.
+    float shimmer = pow((a1 * 0.6 + a2 * 0.4) * 0.5 + 0.5, 2.2);
+
+    // Rising, so the band is denser at its base than at its top.
+    float lift = smoothstep(0.0, 1.0, 1.0 - (uv.y - (u_fade - 0.29)) / 0.30);
+
+    float a = band * shimmer * lift * u_amount * 0.20;
+    return half4(half3(1.0, 0.80, 0.58) * a, a);
+}`,
+)!;
+
 const MODE: Partial<Record<Condition, number>> = {
   "light-rain": 0,
   downpour: 0,
@@ -356,6 +433,7 @@ const MODE: Partial<Record<Condition, number>> = {
   snow: 1,
   hail: 2,
   fog: 3,
+  freezing: 4,
 };
 
 type Props = {
@@ -365,6 +443,8 @@ type Props = {
   precipProbPct: number;
   windKmh: number;
   cloudCoverPct: number;
+  /** Degrees Celsius. Nothing below body heat draws anything; see `HEAT`. */
+  temperatureC: number;
 };
 
 export function Atmosphere({
@@ -373,6 +453,7 @@ export function Atmosphere({
   precipProbPct,
   windKmh,
   cloudCoverPct,
+  temperatureC,
 }: Props) {
   const clock = useClock();
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -398,7 +479,55 @@ export function Atmosphere({
         : Math.min(1, precipProbPct / 100 + (condition === "downpour" ? 0.35 : 0));
   const slant = Math.max(-0.6, Math.min(0.6, windKmh / 30));
   const starAmount = Math.max(0, 1 - sun * 6) * Math.max(0, 1 - overcast * 1.35);
-  const storming = condition === "storm";
+  // The code, not the condition: 96 and 99 are thunderstorms whose falling body is hail,
+  // so asking the condition got a silent sky on the two loudest codes in the set.
+  const storming = hasThunder(weatherCode);
+
+  // Nothing at all until it is genuinely hot, and full by the temperature at which the
+  // engine's own profiles have long since excluded every hour. A gradient that started at
+  // room temperature would be drawing on almost every summer day, which is how a reading
+  // becomes wallpaper.
+  const heat = Math.max(0, Math.min(1, (temperatureC - 28) / 12));
+
+  /**
+   * Where the sun or the moon is, and how much of it gets through.
+   *
+   * The layer drew stars, cloud, rain, snow, hail, fog, wind and lightning, and never the
+   * one object everybody looks for. A clear day was an empty gradient.
+   *
+   * The path is the same curve `elevation` already uses, read sideways: horizontal
+   * position is how far through its arc the body is, vertical position is how high it
+   * climbed. So the sun rises where the day starts and sets where it ends, and the moon
+   * does the same across the night — which is not an ephemeris, and is not pretending to
+   * be one. It is the same honesty the gradient has: the shape of a day, not a claim about
+   * a particular sky.
+   */
+  const daylight = sun > 0;
+
+  // How far through its own arc the body is: thirteen hours of day from 06:30, eleven of
+  // night from 19:30. Both run 0 to 1, which is what lets one piece of arithmetic put
+  // either of them in the sky.
+  const arc = daylight
+    ? (localHour - 6.5) / 13
+    : ((localHour + 24 - 19.5) % 24) / 11;
+
+  // The same sine for both. The first version gave the moon a *fixed* height, so it slid
+  // across at one altitude and never rose or set — the sun arced and the moon was on a
+  // rail, which is the half of the cycle this was supposed to draw.
+  const height = Math.max(0, Math.sin(Math.PI * arc));
+
+  const body = {
+    x: 0.08 + arc * 0.84,
+    // High in its arc is near the top; at either end it sits on the horizon.
+    y: 0.1 + (1 - height) * (FADE_AT - 0.16),
+    // Nothing gets through an overcast deck, and nothing at all gets through weather.
+    // Cloud cover alone was too weak a test: a sun stayed faintly visible through snow,
+    // because a snowing sky is not always a fully clouded one in the forecast.
+    show:
+      condition === "clear" || condition === "partly"
+        ? Math.max(0, 1 - overcast * 1.6)
+        : 0,
+  };
 
   const weatherUniforms = useDerivedValue(() => ({
     u_resolution: [size.width, size.height],
@@ -406,6 +535,13 @@ export function Atmosphere({
     u_intensity: intensity,
     u_slant: slant,
     u_mode: mode ?? 0,
+    u_fade: FADE_AT,
+  }));
+
+  const heatUniforms = useDerivedValue(() => ({
+    u_resolution: [size.width, size.height],
+    u_time: clock.get() / 1000,
+    u_amount: heat,
     u_fade: FADE_AT,
   }));
 
@@ -474,11 +610,42 @@ export function Atmosphere({
             </Rect>
           ) : null}
 
+          {/* After the stars and before the cloud: nearer than one, behind the other. */}
+          {body.show > 0.02 ? (
+            <Group opacity={body.show}>
+              <Group>
+                {/* The halo, which is most of what a sun looks like. Brown-orange rather
+                    than golden, for the reason docs/10 gives about the whole palette. */}
+                <Blur blur={size.width * 0.06} />
+                <Circle
+                  cx={body.x * size.width}
+                  cy={body.y * size.height}
+                  r={size.width * (daylight ? 0.085 : 0.05)}
+                  color={daylight ? colors.burn : colors.rule}
+                />
+              </Group>
+              <Circle
+                cx={body.x * size.width}
+                cy={body.y * size.height}
+                r={size.width * (daylight ? 0.042 : 0.028)}
+                color={daylight ? colors.ink : colors.ink2}
+              />
+            </Group>
+          ) : null}
+
           {/* Cloud before precipitation, so rain falls in front of the mass it comes
               from rather than behind it. */}
           {overcast > 0.02 ? (
             <Rect x={0} y={0} width={size.width} height={size.height}>
               <Shader source={CLOUDS} uniforms={cloudUniforms} />
+            </Rect>
+          ) : null}
+
+          {/* Under the precipitation and over the cloud: the haze is between the viewer
+              and the horizon, and anything falling is nearer than both. */}
+          {heat > 0.01 ? (
+            <Rect x={0} y={0} width={size.width} height={size.height}>
+              <Shader source={HEAT} uniforms={heatUniforms} />
             </Rect>
           ) : null}
 
