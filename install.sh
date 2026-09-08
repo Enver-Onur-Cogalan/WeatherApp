@@ -54,10 +54,23 @@ set_once POSTGRES_PASSWORD "$(secret)"
 MODEL=$(grep -E '^OLLAMA_MODEL=' .env | cut -d= -f2-)
 MODEL=${MODEL:-gemma4:e4b}
 
+FILES=(-f docker-compose.yml)
+
 if [ "$BUNDLED" = "1" ]; then
   # The one value compose cannot vary by profile, so it is set here instead.
   sed -i.bak 's|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=http://ollama:11434|' .env && rm -f .env.bak
   PROFILE=(--profile bundled)
+
+  # Only when the host actually has one. A devices reservation is refused outright on a
+  # machine without the NVIDIA toolkit, so this cannot live in the main compose file —
+  # and without it a GPU server runs the model on its CPUs and merely feels slow, which
+  # is the failure that does not announce itself (ADR-0010).
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    FILES+=(-f docker-compose.gpu.yml)
+    echo "  NVIDIA GPU detected; the model will use it."
+  else
+    echo "  No NVIDIA GPU detected; the model will run on the CPU and answers will be slow."
+  fi
 else
   sed -i.bak 's|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=http://host.docker.internal:11434|' .env && rm -f .env.bak
   PROFILE=()
@@ -65,7 +78,7 @@ fi
 
 # ── Bring it up ─────────────────────────────────────────────────────────────────────
 say "Building and starting"
-docker compose "${PROFILE[@]}" up -d --build
+docker compose "${FILES[@]}" "${PROFILE[@]}" up -d --build
 
 if [ "$BUNDLED" = "1" ]; then
   say "Pulling ${MODEL}"
@@ -73,10 +86,10 @@ if [ "$BUNDLED" = "1" ]; then
   # Waiting for the container rather than assuming: `up -d` returns as soon as the
   # process starts, and ollama is not listening yet.
   for _ in $(seq 1 60); do
-    docker compose exec -T ollama ollama list >/dev/null 2>&1 && break
+    docker compose "${FILES[@]}" exec -T ollama ollama list >/dev/null 2>&1 && break
     sleep 2
   done
-  docker compose exec -T ollama ollama pull "$MODEL"
+  docker compose "${FILES[@]}" exec -T ollama ollama pull "$MODEL"
 fi
 
 # ── Say whether it worked ───────────────────────────────────────────────────────────

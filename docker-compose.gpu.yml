@@ -1,0 +1,21 @@
+# NVIDIA passthrough for the bundled Ollama, applied only when the host has a GPU.
+#
+# It is a separate file rather than part of the main one because a `devices` reservation
+# is not advisory: on a host without the NVIDIA Container Toolkit, compose refuses to
+# start the service at all. Merged in unconditionally it would break every CPU-only
+# server, and left out entirely it produces the failure ADR-0010 describes on macOS —
+# inference falling back to CPU, which does not error, it just feels broken.
+#
+# `install.sh` includes this when `nvidia-smi` is present. By hand:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile bundled up
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
