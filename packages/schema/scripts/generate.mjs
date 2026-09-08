@@ -154,7 +154,7 @@ function pyType(node, root, extraModels, imports) {
   } else if (type === "boolean") {
     out = "bool";
   } else if (type === "array") {
-    out = `list[${pyType(resolved.items, root, extraModels, imports)}]`;
+    out = `list[${pyItem(resolved.items, root, extraModels, imports)}]`;
   } else if (type === "object") {
     // A nested object becomes its own model, named after the $ref when there is one.
     const refName = node.$ref ? pascal(node.$ref.split("/").pop()) : null;
@@ -169,6 +169,40 @@ function pyType(node, root, extraModels, imports) {
   }
 
   return nullable(resolved) ? `${out} | None` : out;
+}
+
+/**
+ * An array's item type, carrying the item's own constraints.
+ *
+ * `pyField` only ever applied the constraints of the *field*, so an array said everything
+ * about its length and nothing about what was in it: `{"type": "array", "items":
+ * {"type": "string", "maxLength": 200}}` generated `list[str]` and the 200 disappeared.
+ * Zod kept it. One definition therefore produced two different contracts — the precise
+ * failure this package exists to prevent — and the server happily emitted a 300-character
+ * warning that the client then refused to parse.
+ *
+ * It cost an evening to find, because the symptom was on the wrong side: the phone said
+ * the server was unreachable while the server's own log recorded the answer as sent.
+ */
+function pyItem(node, root, extraModels, imports) {
+  const resolved = deref(node, root);
+  const inner = pyType(node, root, extraModels, imports);
+  const constraints = [];
+
+  if (resolved.type === "string") {
+    const parts = [];
+    if (resolved.minLength !== undefined) parts.push(`min_length=${resolved.minLength}`);
+    if (resolved.maxLength !== undefined) parts.push(`max_length=${resolved.maxLength}`);
+    if (resolved.pattern !== undefined) parts.push(`pattern=${JSON.stringify(resolved.pattern)}`);
+    if (parts.length) constraints.push(`StringConstraints(${parts.join(", ")})`);
+  } else if (resolved.type === "integer" || resolved.type === "number") {
+    const parts = [];
+    if (resolved.minimum !== undefined) parts.push(`ge=${resolved.minimum}`);
+    if (resolved.maximum !== undefined) parts.push(`le=${resolved.maximum}`);
+    if (parts.length) constraints.push(`Field(${parts.join(", ")})`);
+  }
+
+  return constraints.length ? `Annotated[${inner}, ${constraints.join(", ")}]` : inner;
 }
 
 function pyField(name, node, root, required, extraModels, imports) {
@@ -218,14 +252,18 @@ function toPydantic(schema, name) {
   const body = [...nested, `class ${name}(BaseModel):`, ...fields].join("\n");
   // Only import what the output actually uses — an unused import is a lint error in
   // generated code, which is a generator bug rather than something to exclude.
-  const needsLiteral = body.includes("Literal[");
+  const fromTyping = [];
+  if (body.includes("Annotated[")) fromTyping.push("Annotated");
+  if (body.includes("Literal[")) fromTyping.push("Literal");
+  const fromPydantic = ["BaseModel", "ConfigDict", "Field"];
+  if (body.includes("StringConstraints(")) fromPydantic.push("StringConstraints");
   return [
     BANNER_PY,
     "",
     "from __future__ import annotations",
     "",
-    ...(needsLiteral ? ["from typing import Literal", ""] : []),
-    "from pydantic import BaseModel, ConfigDict, Field",
+    ...(fromTyping.length ? [`from typing import ${fromTyping.join(", ")}`, ""] : []),
+    `from pydantic import ${fromPydantic.join(", ")}`,
     "",
     ...[...imports].map((t) => `from .${snake(t.name)} import ${t.name}`),
     ...(imports.size ? [""] : []),

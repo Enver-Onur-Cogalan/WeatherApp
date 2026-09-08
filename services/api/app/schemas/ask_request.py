@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from .activity_profile import ActivityProfile
@@ -28,4 +30,8 @@ class AskRequest(BaseModel):
         default=None,
         max_length=2,
         description='The last few exchanges, oldest first, so a follow-up has something to refer to. Two at most: "neden?" needs one, and more turns the escape hatch into a chat app, which ADR-0014 decided against.',
+    )
+    language: Literal["tr", "en"] | None = Field(
+        default=None,
+        description="Which language to answer in. The app sends what the person chose in settings; omitted, the server infers it from the question, which it used to do always and which drifted — the model was asked to match the question's language and nothing checked that it had.",
     )

@@ -14,6 +14,7 @@ export const AskRequest = z.object({
   question: z.string().min(1).max(500),
   answer: z.string().min(1).max(600),
 }).strict()).max(2).optional(),
+  language: z.enum(["tr", "en"]).nullable().optional(),
 }).strict();
 
 export type AskRequest = z.infer<typeof AskRequest>;

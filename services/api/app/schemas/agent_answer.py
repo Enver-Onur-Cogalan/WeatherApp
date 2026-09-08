@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class AgentAnswer(BaseModel):
@@ -20,7 +20,12 @@ class AgentAnswer(BaseModel):
         max_length=400,
         description="One or two sentences explaining the verdict, in the language the question was asked in. Cite only figures that appear in the tool results.",
     )
-    warnings: list[str] = Field(
+    warnings: list[Annotated[str, StringConstraints(max_length=200)]] = Field(
         max_length=4,
         description="Conditions worth flagging even when the verdict is good. Empty when there are none. Never mention weather that is not in the tool results.",
+    )
+    window_index: int | None = Field(
+        ge=0,
+        le=4,
+        description="Which of the ranked windows the answer is about, counting from 0 in the order they were listed, or null when the answer is not about a window. The model picks; the engine supplies every figure (ADR-0007). Before this existed the engine's own best window was attached to every answer, so asking about the weekend produced a card showing Monday.",
     )

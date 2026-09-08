@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -40,7 +40,7 @@ class ActivityProfile(BaseModel):
         le=15,
         description="Highest acceptable UV index, or null if the person did not say.",
     )
-    preferred_hours: list[int] = Field(
+    preferred_hours: list[Annotated[int, Field(ge=0, le=23)]] = Field(
         min_length=2,
         max_length=2,
         description="The hours of day the person prefers, as [start, end] in local time. Without this term the engine ranks 03:00 as the best hour of the week.",

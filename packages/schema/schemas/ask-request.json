@@ -66,6 +66,18 @@
           }
         }
       }
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "tr",
+        "en"
+      ],
+      "default": null,
+      "description": "Which language to answer in. The app sends what the person chose in settings; omitted, the server infers it from the question, which it used to do always and which drifted — the model was asked to match the question's language and nothing checked that it had."
     }
   }
 }

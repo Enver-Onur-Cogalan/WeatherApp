@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class Window(BaseModel):
@@ -56,7 +56,7 @@ class PlanResponse(BaseModel):
         max_length=400,
         description="One or two sentences explaining the verdict, in the language the question was asked in.",
     )
-    warnings: list[str] = Field(
+    warnings: list[Annotated[str, StringConstraints(max_length=200)]] = Field(
         max_length=4,
         description="Conditions worth flagging even when the verdict is good. Empty when there are none.",
     )
