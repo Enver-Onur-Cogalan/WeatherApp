@@ -11,6 +11,7 @@
  * the app offers, what their limits are, and how any of it is worded for a person.
  */
 
+import { copyFor, type Language } from "@/lib/i18n";
 import type { ActivityProfile, PlanResult } from "@weatherapp/schema";
 
 export type { ActivityProfile, PlanResult };
@@ -38,21 +39,15 @@ export const ACTIVITIES = ["running", "cycling", "picnic"] as const;
 export type ActivityKey = (typeof ACTIVITIES)[number];
 
 /** What the chips say. The engine's activity slug is not user-facing copy. */
-export const ACTIVITY_LABELS: Record<ActivityKey, string> = {
-  running: "Koşu",
-  cycling: "Bisiklet",
-  picnic: "Piknik",
-};
+export function activityLabel(key: ActivityKey, language: Language): string {
+  return copyFor(language).activities[key];
+}
 
 /** Why an hour lost points, in the user's words rather than the engine's field name. */
-export const CONSTRAINT_LABELS: Record<string, string> = {
-  temperature: "Sıcaklık",
-  wind: "Rüzgâr",
-  precipitation: "Yağış",
-  uv: "UV",
-  severe_weather: "Sert hava",
-  time_of_day: "Saat",
-};
+export function constraintLabel(key: string, language: Language): string {
+  const labels: Record<string, string> = copyFor(language).constraints;
+  return labels[key] ?? key;
+}
 
 /**
  * What each activity asks of the weather.
@@ -97,10 +92,9 @@ export const PROFILES: Record<ActivityKey, ActivityProfile> = {
 
 export type Span = "day" | "week";
 
-export const SPAN_LABELS: Record<Span, string> = {
-  day: "24 saat",
-  week: "7 gün",
-};
+export function spanLabel(span: Span, language: Language): string {
+  return copyFor(language).span[span];
+}
 
 /**
  * Flat number arrays for the hours on screen.
@@ -189,16 +183,18 @@ export function bestHourIndex(plan: PlanResult, slice: TraceSlice, dayOffset = 0
   return top;
 }
 
-const WEEKDAYS_SHORT = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
-
-function weekdayShort(date: string): string {
+function weekdayShort(date: string, language: Language): string {
   const [year, month, day] = date.split("-").map(Number);
-  return WEEKDAYS_SHORT[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  const copy = copyFor(language);
+  return copy.weekdaysShort[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
 }
 
 /** Short day names for the day strip, taken from the server's own day grouping. */
-export function dayLabels(plan: PlanResult): string[] {
-  return plan.days.map((day, index) => (index === 0 ? "Bugün" : weekdayShort(day.date)));
+export function dayLabels(plan: PlanResult, language: Language): string[] {
+  const copy = copyFor(language);
+  return plan.days.map((day, index) =>
+    index === 0 ? copy.today : weekdayShort(day.date, language),
+  );
 }
 
 /** Conditions right now, or null when the forecast does not reach the present. */
@@ -219,11 +215,10 @@ export function currentDayIndex(plan: PlanResult): number {
 }
 
 /** "Cumartesi 06:00–11:00" — the verdict, which is a span rather than a number. */
-const WEEKDAYS = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
-
-export function formatWindowDay(window: WritableWindow): string {
+export function formatWindowDay(window: WritableWindow, language: Language): string {
   const [year, month, day] = window.day.split("-").map(Number);
-  return WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  const copy = copyFor(language);
+  return copy.weekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
 }
 
 export function formatWindowSpan(window: WritableWindow): string {
@@ -232,11 +227,12 @@ export function formatWindowSpan(window: WritableWindow): string {
 }
 
 /** "14 dk önce" — staleness has to be visible, so it is never hidden behind a tooltip. */
-export function formatAge(fetchedAt: string, now = Date.now()): string {
+export function formatAge(fetchedAt: string, language: Language, now = Date.now()): string {
+  const { age } = copyFor(language);
   const minutes = Math.max(0, Math.round((now - Date.parse(fetchedAt)) / 60000));
-  if (minutes < 1) return "az önce";
-  if (minutes < 60) return `${minutes} dk önce`;
+  if (minutes < 1) return age.justNow;
+  if (minutes < 60) return age.minutes(minutes);
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} sa önce`;
-  return `${Math.round(hours / 24)} gün önce`;
+  if (hours < 24) return age.hours(hours);
+  return age.days(Math.round(hours / 24));
 }

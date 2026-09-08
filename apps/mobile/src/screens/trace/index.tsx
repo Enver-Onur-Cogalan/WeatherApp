@@ -12,6 +12,7 @@
  * and a smear on a phone, so the week gets a grid of days instead.
  */
 
+import { useCopy, useLanguage } from "@/lib/i18n";
 import { useMemo, useState } from "react";
 import {
   Pressable,
@@ -34,9 +35,9 @@ import { Failure, Loading } from "@/components/states";
 import { Trace } from "@/components/trace";
 import { arrive } from "@/lib/motion";
 import {
-  CONSTRAINT_LABELS,
   bestHourIndex,
   currentDayIndex,
+  constraintLabel,
   currentHour,
   dayLabels,
   formatAge,
@@ -55,6 +56,7 @@ import { colors, radius, size, space, type } from "@/theme";
 const GUTTER = space.lg;
 
 export function TraceScreen() {
+  const copy = useCopy();
   const { choices } = useChoices();
   const [chosen, setChosen] = useState<string | null>(null);
 
@@ -71,7 +73,7 @@ export function TraceScreen() {
   if (isPending) {
     return (
       <Shell place={selected.label}>
-        <Loading label="Tahmin alınıyor" />
+        <Loading label={copy.trace.fetching} />
       </Shell>
     );
   }
@@ -135,6 +137,8 @@ function Loaded({
   onRefresh: () => Promise<void>;
 }) {
   const { width } = useWindowDimensions();
+  const copy = useCopy();
+  const language = useLanguage();
   const [span, setSpan] = useState<Span>("day");
   const [day, setDay] = useState<number | null>(null);
   const [scrubbed, setScrubbed] = useState<number | null>(null);
@@ -162,7 +166,7 @@ function Loaded({
   // Opens on the day the person is actually in, not on the first day of the forecast.
   const today = currentDayIndex(plan);
   const selectedDay = day ?? today;
-  const days = useMemo(() => dayLabels(plan), [plan]);
+  const days = useMemo(() => dayLabels(plan, language), [plan, language]);
   const slice = useMemo(() => sliceFor(plan, "day", selectedDay), [plan, selectedDay]);
   const startAt = useMemo(
     () => bestHourIndex(plan, slice, selectedDay),
@@ -192,6 +196,7 @@ function Loaded({
         precipProbPct={atmosphereHour.precip_prob_pct}
         windKmh={atmosphereHour.wind_kmh}
         cloudCoverPct={atmosphereHour.cloud_cover_pct}
+        temperatureC={atmosphereHour.temperature_c}
       />
       <SafeAreaView style={styles.fill} edges={["top"]}>
         <SkyProvider
@@ -256,8 +261,8 @@ function Loaded({
             the calendar answers "which day" — different questions, so they get different
             drawings rather than the same one at two zoom levels. */}
         <View style={styles.tabs}>
-          <Tab label="24 saat" active={span === "day"} onPress={() => setSpan("day")} />
-          <Tab label="7 gün" active={span === "week"} onPress={() => setSpan("week")} />
+          <Tab label={copy.span.day} active={span === "day"} onPress={() => setSpan("day")} />
+          <Tab label={copy.span.week} active={span === "week"} onPress={() => setSpan("week")} />
         </View>
 
         {span === "day" ? (
@@ -301,8 +306,7 @@ function Loaded({
             />
 
             <Text style={styles.legend}>
-              Çizgi ne kadar yüksekse o saat {choice.label.toLocaleLowerCase("tr")} için
-              o kadar uygun. Kehribar bölümler sınırlarını geçen pencereler.
+              {copy.trace.dayHelp(choice.label)}
             </Text>
           </Animated.View>
         ) : (
@@ -311,9 +315,7 @@ function Loaded({
           <Animated.View key="calendar" style={styles.weekView} entering={arrive()}>
             <Calendar plan={plan} onSelectDay={showDay} />
             <Text style={styles.legend}>
-              Her kart bir gün. Kehribar bantlar sınırlarını geçen saatler; hepsi aynı
-              00–24 ekseninde, böylece açık saatler haftada bir sütun olarak okunur. Bir
-              karta dokun, o günün izini aç.
+              {copy.trace.weekHelp}
             </Text>
           </Animated.View>
         )}
@@ -335,12 +337,14 @@ function Loaded({
  */
 function Header({ place, plan }: { place: string; plan: PlanResult }) {
   const ink = useInk();
+  const copy = useCopy();
+  const language = useLanguage();
   return (
     <>
       <Text style={[styles.place, { color: ink.ink }]}>{place}</Text>
       <Text style={[styles.age, { color: ink.inkDim }]}>
-        {plan.stale ? "bayat · " : ""}
-        {formatAge(plan.fetched_at)}
+        {plan.stale ? copy.trace.stalePrefix : ""}
+        {formatAge(plan.fetched_at, language)}
       </Text>
     </>
   );
@@ -348,13 +352,15 @@ function Header({ place, plan }: { place: string; plan: PlanResult }) {
 
 function Verdict({ window, label }: { window: Window; label: string }) {
   const ink = useInk();
+  const copy = useCopy();
+  const language = useLanguage();
   return (
     <View style={styles.verdict}>
-      <Text style={[styles.day, { color: ink.ink }]}>{formatWindowDay(window)}</Text>
-      <Text style={[styles.span, { color: ink.accent }]}>{formatWindowSpan(window)}</Text>
-      <Text style={[styles.why, { color: ink.ink2 }]}>
-        {label} için haftanın en iyi penceresi.
+      <Text style={[styles.day, { color: ink.ink }]}>
+        {formatWindowDay(window, language)}
       </Text>
+      <Text style={[styles.span, { color: ink.accent }]}>{formatWindowSpan(window)}</Text>
+      <Text style={[styles.why, { color: ink.ink2 }]}>{copy.trace.bestWindow(label)}</Text>
     </View>
   );
 }
@@ -377,13 +383,15 @@ function Offline({
   fetchedAt: string;
   onRefresh: () => void;
 }) {
+  const copy = useCopy();
+  const language = useLanguage();
   return (
     <View style={styles.offline}>
       <Text style={styles.offlineText}>
-        Sunucuya ulaşılamıyor. Bu iz {formatAge(fetchedAt)} alınan tahminden.
+        {copy.trace.stale(formatAge(fetchedAt, language))}
       </Text>
       <Pressable onPress={onRefresh} hitSlop={8} accessibilityRole="button">
-        <Text style={styles.offlineAction}>Yenile</Text>
+        <Text style={styles.offlineAction}>{copy.trace.refresh}</Text>
       </Pressable>
     </View>
   );
@@ -391,20 +399,19 @@ function Offline({
 
 function Empty({ blocker, label }: { blocker: PlanResult["blocker"]; label: string }) {
   const ink = useInk();
+  const copy = useCopy();
+  const language = useLanguage();
   return (
     <View style={styles.verdict}>
       <Text style={[styles.emptyHead, { color: ink.ink }]}>
-        Bu hafta hiçbir saat sınırlarını geçmiyor
+        {copy.trace.nothingClears}
       </Text>
       {blocker ? (
         <Text style={[styles.why, { color: ink.ink2 }]}>
-          {CONSTRAINT_LABELS[blocker.constraint] ?? blocker.constraint} limitin tek başına{" "}
-          {blocker.hours} saati eledi.
+          {copy.trace.blocker(constraintLabel(blocker.constraint, language), blocker.hours)}
         </Text>
       ) : (
-        <Text style={[styles.why, { color: ink.ink2 }]}>
-          {label} profilin için sonuç yok.
-        </Text>
+        <Text style={[styles.why, { color: ink.ink2 }]}>{copy.trace.noResult(label)}</Text>
       )}
     </View>
   );

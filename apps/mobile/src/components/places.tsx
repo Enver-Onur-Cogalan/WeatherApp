@@ -16,6 +16,7 @@
  * rather than defaulting it.
  */
 
+import { useCopy } from "@/lib/i18n";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -46,6 +47,7 @@ export function Places({
   /** Called when a place is chosen. Absent in Sen, where choosing is not the point. */
   onPicked?: () => void;
 }) {
+  const copy = useCopy();
   const { selected, select, saved } = useSelectedLocation();
   const save = useSaveLocation();
   const remove = useDeleteLocation();
@@ -64,10 +66,7 @@ export function Places({
   return (
     <View style={styles.wrap}>
       {saved.length === 0 ? (
-        <Text style={styles.note}>
-          Kayıtlı yerin yok. Uygulama şimdilik {selected.label} için çalışıyor; buradan
-          kendi yerini eklersen ona geçer.
-        </Text>
+        <Text style={styles.note}>{copy.places.none(selected.label)}</Text>
       ) : (
         saved.map((place) => (
           <Row
@@ -96,16 +95,13 @@ export function Places({
           accessibilityRole="button"
         >
           <Text style={styles.addText}>
-            {asking ? "Konum alınıyor…" : "Konumumu kullan"}
+            {asking ? copy.places.locating : copy.places.useMine}
           </Text>
         </Pressable>
       ) : null}
 
       {refused ? (
-        <Text style={styles.note}>
-          Konum izni verilmedi. Yerini aşağıdan arayarak ekleyebilirsin — uygulamanın geri
-          kalanı aynı şekilde çalışır.
-        </Text>
+        <Text style={styles.note}>{copy.places.refused}</Text>
       ) : null}
 
       {adding ? (
@@ -118,7 +114,7 @@ export function Places({
           style={styles.add}
           accessibilityRole="button"
         >
-          <Text style={styles.addText}>Yer ekle</Text>
+          <Text style={styles.addText}>{copy.places.add}</Text>
         </Pressable>
       )}
     </View>
@@ -136,6 +132,7 @@ function Row({
   onSelect: () => void;
   onDelete: () => void;
 }) {
+  const copy = useCopy();
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -145,7 +142,7 @@ function Row({
           {place.label}
           {/* Named rather than left to be inferred from the fact that it changed by
               itself. A row that rewrites its own name is confusing until you know why. */}
-          {place.is_current ? <Text style={styles.badge}>  konumum</Text> : null}
+          {place.is_current ? <Text style={styles.badge}>  {copy.places.mine}</Text> : null}
         </Text>
         <Text style={styles.zone}>{place.timezone}</Text>
       </Pressable>
@@ -153,14 +150,14 @@ function Row({
       {confirming ? (
         <View style={styles.confirm}>
           <Pressable onPress={onDelete} hitSlop={6} accessibilityRole="button">
-            <Text style={styles.destructive}>Sil</Text>
+            <Text style={styles.destructive}>{copy.common.delete}</Text>
           </Pressable>
           <Pressable
             onPress={() => setConfirming(false)}
             hitSlop={6}
             accessibilityRole="button"
           >
-            <Text style={styles.quiet}>Vazgeç</Text>
+            <Text style={styles.quiet}>{copy.common.cancel}</Text>
           </Pressable>
         </View>
       ) : (
@@ -169,7 +166,7 @@ function Row({
           hitSlop={8}
           accessibilityRole="button"
         >
-          <Text style={styles.quiet}>Sil</Text>
+          <Text style={styles.quiet}>{copy.common.delete}</Text>
         </Pressable>
       )}
     </View>
@@ -183,6 +180,7 @@ function Search({
   onPick: (place: Place) => void;
   onCancel: () => void;
 }) {
+  const copy = useCopy();
   const [query, setQuery] = useState("");
   const { data, isFetching, isError } = useSearchPlaces(query);
 
@@ -191,7 +189,7 @@ function Search({
       <TextInput
         value={query}
         onChangeText={setQuery}
-        placeholder="Şehir veya semt"
+        placeholder={copy.places.searchPlaceholder}
         placeholderTextColor={colors.inkDim}
         style={styles.input}
         autoFocus
@@ -200,9 +198,7 @@ function Search({
       />
 
       {isError ? (
-        <Text style={styles.failure}>
-          Yer araması şu an çalışmıyor. Sunucuya ulaşılabiliyor mu, kontrol et.
-        </Text>
+        <Text style={styles.failure}>{copy.places.searchFailed}</Text>
       ) : isFetching ? (
         <ActivityIndicator color={colors.burnHi} size="small" style={styles.spinner} />
       ) : (
@@ -222,7 +218,7 @@ function Search({
       )}
 
       <Pressable onPress={onCancel} style={styles.cancel} accessibilityRole="button">
-        <Text style={styles.quiet}>Vazgeç</Text>
+        <Text style={styles.quiet}>{copy.common.cancel}</Text>
       </Pressable>
     </View>
   );

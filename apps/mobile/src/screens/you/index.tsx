@@ -10,6 +10,8 @@
  * (docs/11) and are not built.
  */
 
+import { LanguagePicker } from "@/components/language-picker";
+import { useCopy } from "@/lib/i18n";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -22,6 +24,7 @@ import { Profiles } from "@/screens/you/profiles";
 import { colors, radius, size, space, type } from "@/theme";
 
 export function YouScreen() {
+  const copy = useCopy();
   const status = useAuth((state) => state.status);
   const account = useAuth((state) => state.account);
 
@@ -29,8 +32,8 @@ export function YouScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>Ayarlar</Text>
-          <Text style={styles.title}>Sen</Text>
+          <Text style={styles.eyebrow}>{copy.you.settings}</Text>
+          <Text style={styles.title}>{copy.you.title}</Text>
         </View>
 
         {status === "restoring" ? (
@@ -56,21 +59,22 @@ export function YouScreen() {
           <>
             <Profiles />
             <View style={styles.card}>
-              <Text style={styles.label}>Yerler</Text>
+              <Text style={styles.label}>{copy.you.places}</Text>
               <Places />
             </View>
+            <LanguagePicker />
+            <Tour />
           </>
         ) : null}
 
-        <Text style={styles.pending}>
-          Bildirimler ve asistan durumu buraya gelecek.
-        </Text>
+        <Text style={styles.pending}>{copy.you.pending}</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 function SignedIn({ email }: { email: string }) {
+  const copy = useCopy();
   const signOut = useAuth((state) => state.signOut);
   const [busy, setBusy] = useState(false);
 
@@ -84,24 +88,25 @@ function SignedIn({ email }: { email: string }) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.label}>Hesap</Text>
+      <Text style={styles.label}>{copy.you.account}</Text>
       <Text style={styles.email}>{email}</Text>
-      <Text style={styles.note}>
-        Profillerin ve konumların bu hesaba kayıtlı. Uygulamayı silip kursan da duruyorlar.
-      </Text>
+      <Text style={styles.note}>{copy.you.signedIn}</Text>
       <Pressable
         onPress={leave}
         disabled={busy}
         style={[styles.action, busy && styles.dim]}
         accessibilityRole="button"
       >
-        <Text style={styles.actionText}>{busy ? "Çıkılıyor…" : "Çıkış yap"}</Text>
+        <Text style={styles.actionText}>
+          {busy ? copy.you.signingOut : copy.you.signOut}
+        </Text>
       </Pressable>
     </View>
   );
 }
 
 function Handoff({ userId }: { userId: string }) {
+  const copy = useCopy();
   const [count, setCount] = useState(0);
   const [busy, setBusy] = useState(false);
 
@@ -119,37 +124,57 @@ function Handoff({ userId }: { userId: string }) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.label}>Taşınmamış profiller</Text>
-      <Text style={styles.note}>
-        Bu telefonda, hesabına bağlı olmayan {count} profil var. Taşırsan başka cihazdan
-        da açılır.
-      </Text>
+      <Text style={styles.label}>{copy.you.unmovedLabel}</Text>
+      <Text style={styles.note}>{copy.you.unmoved(count)}</Text>
       <Pressable
         onPress={move}
         disabled={busy}
         style={[styles.action, busy && styles.dim]}
         accessibilityRole="button"
       >
-        <Text style={styles.actionText}>{busy ? "Taşınıyor…" : "Hesabıma taşı"}</Text>
+        <Text style={styles.actionText}>
+          {busy ? copy.you.moving : copy.you.moveToAccount}
+        </Text>
       </Pressable>
     </View>
   );
 }
 
 function Guest() {
+  const copy = useCopy();
   return (
     <View style={styles.card}>
-      <Text style={styles.label}>Misafirsin</Text>
-      <Text style={styles.note}>
-        Her şey çalışıyor ve hiçbir şey cihazından çıkmıyor. Profillerin bu telefonda
-        saklanıyor. Hesap açarsan sunucuna kaydolur, ikinci cihazından da açılır.
-      </Text>
+      <Text style={styles.label}>{copy.you.guestLabel}</Text>
+      <Text style={styles.note}>{copy.you.guest}</Text>
       <Pressable
         onPress={() => router.push("/welcome")}
         style={styles.action}
         accessibilityRole="button"
       >
-        <Text style={styles.actionText}>Hesap aç veya giriş yap</Text>
+        <Text style={styles.actionText}>{copy.you.signInOrUp}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The tour, again.
+ *
+ * It runs once on first launch, which means the one explanation of what the trace's
+ * vertical axis *is* happens at the moment somebody is least interested in reading it.
+ * Making it repeatable costs one row and removes the need to get that moment right.
+ */
+function Tour() {
+  const copy = useCopy();
+
+  return (
+    <View style={styles.card}>
+      <Pressable
+        onPress={() => router.push("/onboarding")}
+        style={styles.action}
+        accessibilityRole="button"
+      >
+        <Text style={styles.actionText}>{copy.tour.again}</Text>
       </Pressable>
     </View>
   );

@@ -34,6 +34,7 @@
  * answered twice.
  */
 
+import { useCopy, useLanguage } from "@/lib/i18n";
 import {
   Blur,
   Canvas,
@@ -96,6 +97,8 @@ export function DayCard({
   // The only thing severity changes now is the temperature's colour. It used to have its
   // own line of text, which said in words what the burn says in its absence.
   const severe = isSevere(day.summary.weather_code);
+  const copy = useCopy();
+  const language = useLanguage();
   const [width, setWidth] = useState(0);
 
   // 0 → 1 as the day burns itself onto the card.
@@ -132,11 +135,11 @@ export function DayCard({
       accessibilityLabel={[
         day.weekday,
         day.dayLabel,
-        `${Math.round(day.summary.temp_max_c)} dereceye kadar`,
-        conditionLabel(day.summary.weather_code),
+        copy.card.upTo(Math.round(day.summary.temp_max_c)),
+        conditionLabel(day.summary.weather_code, language),
         day.best
-          ? `${day.openHours} saat uygun, en iyisi ${formatWindowSpan(day.best)}`
-          : "uygun saat yok",
+          ? copy.card.openHours(day.openHours, formatWindowSpan(day.best))
+          : copy.card.noOpenHours,
       ].join(", ")}
     >
       <View style={styles.head}>
@@ -149,9 +152,9 @@ export function DayCard({
               person looks for on a weather app that the burn cannot say. The burn answers
               "when is it good"; this answers "what is it like". */}
           <Text style={[styles.condition, severe && styles.severe]} numberOfLines={1}>
-            {day.dayLabel} · {conditionLabel(day.summary.weather_code)}
+            {day.dayLabel} · {conditionLabel(day.summary.weather_code, language)}
             {day.summary.precip_prob_max_pct >= 20
-              ? ` · %${day.summary.precip_prob_max_pct}`
+              ? ` · ${copy.ask.readings.precipValue(day.summary.precip_prob_max_pct)}`
               : ""}
           </Text>
         </View>
@@ -171,7 +174,7 @@ export function DayCard({
           <Text style={styles.open}>{day.openHours} saat</Text>
         </View>
       ) : (
-        <Text style={styles.none}>Uygun saat yok</Text>
+        <Text style={styles.none}>{copy.card.noneOpen}</Text>
       )}
     </Pressable>
   );

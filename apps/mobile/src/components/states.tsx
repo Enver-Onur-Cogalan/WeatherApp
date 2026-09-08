@@ -11,6 +11,7 @@
  * offered when pressing it could plausibly work.
  */
 
+import { useCopy, useLanguage } from "@/lib/i18n";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { describeError, isWorthRetrying } from "@/lib/ask";
@@ -23,7 +24,8 @@ export function Failure({
   error: unknown;
   onRetry?: () => void;
 }) {
-  const { title, detail, technical } = describeError(error);
+  const copy = useCopy();
+  const { title, detail, technical } = describeError(error, useLanguage());
   const retryable = onRetry !== undefined && isWorthRetrying(error);
 
   return (
@@ -33,7 +35,7 @@ export function Failure({
       {technical ? <Text style={styles.technical}>{technical}</Text> : null}
       {retryable ? (
         <Pressable onPress={onRetry} style={styles.retry} accessibilityRole="button">
-          <Text style={styles.retryText}>Tekrar dene</Text>
+          <Text style={styles.retryText}>{copy.common.retry}</Text>
         </Pressable>
       ) : null}
     </View>

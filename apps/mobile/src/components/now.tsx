@@ -7,6 +7,7 @@
  * gesture. This puts it one glance away without taking the top spot from the verdict.
  */
 
+import { useCopy, useLanguage } from "@/lib/i18n";
 import { StyleSheet, Text, View } from "react-native";
 
 import { useInk } from "@/components/legible";
@@ -19,6 +20,8 @@ export function Now({ hour, today }: { hour: ScoredHour | null; today: DaySummar
   // severe colour deliberately does not move: it is a warning, and a warning that changes
   // shade with the time of day stops being one.
   const ink = useInk();
+  const copy = useCopy();
+  const language = useLanguage();
 
   // Without a current hour there is nothing honest to show, and a placeholder
   // temperature would be worse than none.
@@ -37,7 +40,7 @@ export function Now({ hour, today }: { hour: ScoredHour | null; today: DaySummar
             isSevere(hour.weather_code) && styles.severe,
           ]}
         >
-          {conditionLabel(hour.weather_code)}
+          {conditionLabel(hour.weather_code, language)}
         </Text>
       </View>
 
@@ -49,7 +52,7 @@ export function Now({ hour, today }: { hour: ScoredHour | null; today: DaySummar
           </Text>
           {today.precip_prob_max_pct > 0 ? (
             <Text style={[styles.rain, { color: ink.inkDim }]}>
-              yağış %{today.precip_prob_max_pct}
+              {copy.trace.precip(today.precip_prob_max_pct)}
             </Text>
           ) : null}
         </View>

@@ -14,25 +14,28 @@
  * screen shows what the server holds rather than what this device wished for.
  */
 
+import { copyFor, useCopy, useLanguage, type Language } from "@/lib/i18n";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { BUILT_IN, useProfileStore, type SavedProfile } from "@/lib/profiles";
+import { builtIn, useProfileStore, type SavedProfile } from "@/lib/profiles";
 import { type ActivityProfile } from "@/lib/plan";
 import { uuidv7 } from "@/lib/uuid";
 import { colors, radius, size, space, type } from "@/theme";
 
 /** What each limit is called, and how far a step moves it. */
 const LIMITS = [
-  { key: "temp_min", label: "En düşük sıcaklık", unit: "°C", step: 1, min: -40, max: 50 },
-  { key: "temp_max", label: "En yüksek sıcaklık", unit: "°C", step: 1, min: -40, max: 50 },
-  { key: "wind_max_kmh", label: "Rüzgâr limiti", unit: "km/sa", step: 1, min: 0, max: 150 },
-  { key: "precip_max_pct", label: "Yağış ihtimali", unit: "%", step: 5, min: 0, max: 100 },
+  { key: "temp_min", name: "tempMin", unit: "°C", step: 1, min: -40, max: 50 },
+  { key: "temp_max", name: "tempMax", unit: "°C", step: 1, min: -40, max: 50 },
+  { key: "wind_max_kmh", name: "windMax", unit: "wind", step: 1, min: 0, max: 150 },
+  { key: "precip_max_pct", name: "precipMax", unit: "%", step: 5, min: 0, max: 100 },
 ] as const;
 
 type LimitKey = (typeof LIMITS)[number]["key"];
 
 export function Profiles() {
+  const copy = useCopy();
+  const language = useLanguage();
   const store = useProfileStore();
   const [editing, setEditing] = useState<SavedProfile | null>(null);
 
@@ -52,12 +55,12 @@ export function Profiles() {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.label}>Profiller</Text>
+      <Text style={styles.label}>{copy.profiles.label}</Text>
 
       {store.isPending ? (
-        <Text style={styles.note}>Yükleniyor…</Text>
+        <Text style={styles.note}>{copy.common.loading}</Text>
       ) : store.isError ? (
-        <Text style={styles.failure}>Profiller alınamadı. Sen sekmesini yeniden aç.</Text>
+        <Text style={styles.failure}>{copy.profiles.failed}</Text>
       ) : store.profiles.length > 0 ? (
         store.profiles.map((profile) => (
           <Row
@@ -68,19 +71,16 @@ export function Profiles() {
           />
         ))
       ) : (
-        <Text style={styles.note}>
-          Kayıtlı profilin yok. İz şimdilik hazır üç profille çalışıyor; buradan kendi
-          profilini kaydedersen çipler ondan gelir.
-        </Text>
+        <Text style={styles.note}>{copy.profiles.none}</Text>
       )}
 
       <View style={styles.actions}>
         <Pressable
-          onPress={() => setEditing(blank())}
+          onPress={() => setEditing(blank(language))}
           style={styles.action}
           accessibilityRole="button"
         >
-          <Text style={styles.actionText}>Yeni profil</Text>
+          <Text style={styles.actionText}>{copy.profiles.newProfile}</Text>
         </Pressable>
 
         {store.profiles.length === 0 ? (
@@ -92,7 +92,7 @@ export function Profiles() {
             style={styles.action}
             accessibilityRole="button"
           >
-            <Text style={styles.actionText}>Hazır üçünü kaydet</Text>
+            <Text style={styles.actionText}>{copy.profiles.saveBuiltIns}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -109,13 +109,15 @@ function Row({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const copy = useCopy();
+  const language = useLanguage();
   const [confirming, setConfirming] = useState(false);
 
   return (
     <View style={styles.row}>
       <Pressable style={styles.rowMain} onPress={onEdit} accessibilityRole="button">
         <Text style={styles.rowName}>{profile.name}</Text>
-        <Text style={styles.rowDetail}>{summarise(profile.constraints)}</Text>
+        <Text style={styles.rowDetail}>{summarise(profile.constraints, language)}</Text>
       </Pressable>
 
       {confirming ? (
@@ -123,15 +125,15 @@ function Row({
         // hand the one moment the app should feel like itself to the platform.
         <View style={styles.confirm}>
           <Pressable onPress={onDelete} hitSlop={6} accessibilityRole="button">
-            <Text style={styles.destructive}>Sil</Text>
+            <Text style={styles.destructive}>{copy.common.delete}</Text>
           </Pressable>
           <Pressable onPress={() => setConfirming(false)} hitSlop={6} accessibilityRole="button">
-            <Text style={styles.quiet}>Vazgeç</Text>
+            <Text style={styles.quiet}>{copy.common.cancel}</Text>
           </Pressable>
         </View>
       ) : (
         <Pressable onPress={() => setConfirming(true)} hitSlop={8} accessibilityRole="button">
-          <Text style={styles.quiet}>Sil</Text>
+          <Text style={styles.quiet}>{copy.common.delete}</Text>
         </Pressable>
       )}
     </View>
@@ -149,6 +151,7 @@ function Editor({
   onSave: (next: SavedProfile) => void;
   onCancel: () => void;
 }) {
+  const copy = useCopy();
   const [draft, setDraft] = useState(profile);
 
   const setLimit = (key: LimitKey, value: number) =>
@@ -168,8 +171,8 @@ function Editor({
       {LIMITS.map((limit) => (
         <Stepper
           key={limit.key}
-          label={limit.label}
-          unit={limit.unit}
+          label={copy.profiles[limit.name]}
+          unit={limit.unit === "wind" ? copy.profiles.windUnit : limit.unit}
           value={draft.constraints[limit.key]}
           onChange={(value) =>
             setLimit(limit.key, Math.min(limit.max, Math.max(limit.min, value)))
@@ -179,7 +182,7 @@ function Editor({
       ))}
 
       <Stepper
-        label="Tercih ettiğin saatler — başlangıç"
+        label={copy.profiles.hoursFrom}
         unit=":00"
         value={draft.constraints.preferred_hours[0]}
         step={1}
@@ -197,7 +200,7 @@ function Editor({
         }
       />
       <Stepper
-        label="Tercih ettiğin saatler — bitiş"
+        label={copy.profiles.hoursTo}
         unit=":00"
         value={draft.constraints.preferred_hours[1]}
         step={1}
@@ -216,9 +219,7 @@ function Editor({
       />
 
       {impossible ? (
-        <Text style={styles.failure}>
-          En düşük sıcaklık, en yüksekten büyük olamaz.
-        </Text>
+        <Text style={styles.failure}>{copy.profiles.inverted}</Text>
       ) : null}
 
       <View style={styles.actions}>
@@ -230,10 +231,12 @@ function Editor({
           style={[styles.action, (busy || impossible) && styles.dim]}
           accessibilityRole="button"
         >
-          <Text style={styles.actionText}>{busy ? "Kaydediliyor…" : "Kaydet"}</Text>
+          <Text style={styles.actionText}>
+            {busy ? copy.profiles.saving : copy.common.save}
+          </Text>
         </Pressable>
         <Pressable onPress={onCancel} style={styles.action} accessibilityRole="button">
-          <Text style={styles.actionText}>Vazgeç</Text>
+          <Text style={styles.actionText}>{copy.common.cancel}</Text>
         </Pressable>
       </View>
     </View>
@@ -253,6 +256,7 @@ function Stepper({
   step: number;
   onChange: (value: number) => void;
 }) {
+  const copy = useCopy();
   const current = value ?? 0;
 
   return (
@@ -277,7 +281,7 @@ function Stepper({
           hitSlop={10}
           style={styles.step}
           accessibilityRole="button"
-          accessibilityLabel={`${label} artır`}
+          accessibilityLabel={copy.profiles.increase(label)}
         >
           <Text style={styles.stepText}>+</Text>
         </Pressable>
@@ -287,24 +291,25 @@ function Stepper({
 }
 
 /** "5–26°C · 15 km/sa · %20 · 06–10" — the limits, in the order people say them. */
-function summarise(constraints: ActivityProfile): string {
+function summarise(constraints: ActivityProfile, language: Language): string {
+  const copy = copyFor(language);
   const [from, to] = constraints.preferred_hours;
   const pad = (hour: number) => String(hour).padStart(2, "0");
   return [
     `${constraints.temp_min}–${constraints.temp_max}°C`,
-    `${constraints.wind_max_kmh} km/sa`,
-    `%${constraints.precip_max_pct}`,
+    copy.ask.readings.windValue(constraints.wind_max_kmh),
+    copy.ask.readings.precipValue(constraints.precip_max_pct),
     `${pad(from)}–${pad(to)}`,
   ].join(" · ");
 }
 
-function blank(): SavedProfile {
+function blank(language: Language): SavedProfile {
   const now = new Date().toISOString();
   return {
     // Generated here, not by the server (ADR-0015). v7, so ids sort by creation.
     id: uuidv7(),
-    name: "Yeni profil",
-    constraints: { ...BUILT_IN[0].constraints },
+    name: copyFor(language).profiles.newProfileName,
+    constraints: { ...builtIn(language)[0].constraints },
     created_at: now,
     updated_at: now,
   };

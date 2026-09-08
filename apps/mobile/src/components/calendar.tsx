@@ -17,6 +17,7 @@
  * because it is a continuous curve; this does not.
  */
 
+import { copyFor, useLanguage, type Language } from "@/lib/i18n";
 import { StyleSheet, View } from "react-native";
 
 import { DayCard, type Day } from "@/components/day-card";
@@ -24,11 +25,6 @@ import type { PlanResult, Window } from "@/lib/plan";
 import { space } from "@/theme";
 
 const HOURS = 24;
-const WEEKDAYS = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
-const MONTHS = [
-  "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-  "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
-];
 
 /**
  * Days come from the server's own grouping.
@@ -36,7 +32,8 @@ const MONTHS = [
  * The client never re-derives where a day starts from UTC — if it did, the cards and the
  * trace would disagree about which window belongs to which day, twice a year at least.
  */
-function groupByDay(plan: PlanResult): Day[] {
+function groupByDay(plan: PlanResult, language: Language): Day[] {
+  const copy = copyFor(language);
   const byDate = new Map<string, Window[]>();
   for (const window of plan.windows ?? []) {
     const list = byDate.get(window.day) ?? [];
@@ -61,8 +58,8 @@ function groupByDay(plan: PlanResult): Day[] {
       openHours: windows.reduce((n, w) => n + (w.end_hour - w.start_hour + 1), 0),
       windMax: hours.reduce((top, hour) => Math.max(top, hour.wind_kmh), 0),
       date: summary.date,
-      weekday: index === 0 ? "Bugün" : WEEKDAYS[when.getUTCDay()],
-      dayLabel: `${day} ${MONTHS[month - 1]}`,
+      weekday: index === 0 ? copy.today : copy.weekdays[when.getUTCDay()],
+      dayLabel: copy.card.date(day, copy.months[month - 1]),
       windows,
       summary,
       today: index === 0,
@@ -81,7 +78,7 @@ export function Calendar({
   plan: PlanResult;
   onSelectDay: (dayIndex: number) => void;
 }) {
-  const days = groupByDay(plan);
+  const days = groupByDay(plan, useLanguage());
 
   return (
     <View style={styles.stack}>

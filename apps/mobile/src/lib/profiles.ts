@@ -11,6 +11,7 @@
  * not create, in an account whose whole premise is that it stores what they ask it to.
  */
 
+import { copyFor, useLanguage, type Language } from "@/lib/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SavedProfile } from "@weatherapp/schema";
 import { z } from "zod";
@@ -40,15 +41,14 @@ export type Choice = {
   id?: string;
 };
 
-const BUILT_IN_LABELS: Record<ActivityKey, string> = {
-  running: "Koşu",
-  cycling: "Bisiklet",
-  picnic: "Piknik",
-};
-
-export const BUILT_IN: Choice[] = (
-  Object.keys(PROFILES) as ActivityKey[]
-).map((key) => ({ key, label: BUILT_IN_LABELS[key], constraints: PROFILES[key] }));
+export function builtIn(language: Language): Choice[] {
+  const { activities } = copyFor(language);
+  return (Object.keys(PROFILES) as ActivityKey[]).map((key) => ({
+    key,
+    label: activities[key],
+    constraints: PROFILES[key],
+  }));
+}
 
 export function useProfiles() {
   const signedIn = useAuth((state) => state.status === "signed-in");
@@ -83,12 +83,13 @@ const asChoice = (profile: SavedProfile): Choice => ({
  */
 export function useChoices(): { choices: Choice[]; saved: boolean } {
   const signedIn = useAuth((state) => state.status === "signed-in");
+  const language = useLanguage();
   const { data: remote } = useProfiles();
   const local = useLocalProfiles();
 
   const profiles = signedIn ? (remote ?? []) : local;
 
-  if (profiles.length === 0) return { choices: BUILT_IN, saved: false };
+  if (profiles.length === 0) return { choices: builtIn(language), saved: false };
   return { choices: profiles.map(asChoice), saved: true };
 }
 
@@ -158,6 +159,7 @@ export type ProfileStore = {
 export function useProfileStore(): ProfileStore {
   const signedIn = useAuth((state) => state.status === "signed-in");
 
+  const language = useLanguage();
   const query = useProfiles();
   const saveRemote = useSaveProfile();
   const deleteRemote = useDeleteProfile();
@@ -171,7 +173,8 @@ export function useProfileStore(): ProfileStore {
       saving: saveRemote.isPending,
       save: (profile) => saveRemote.mutate(profile),
       remove: (id) => deleteRemote.mutate(id),
-      seed: () => BUILT_IN.forEach((choice) => saveRemote.mutate(fromBuiltIn(choice))),
+      seed: () =>
+        builtIn(language).forEach((choice) => saveRemote.mutate(fromBuiltIn(choice))),
     };
   }
 
@@ -183,7 +186,7 @@ export function useProfileStore(): ProfileStore {
     saving: false,
     save: (profile) => void saveLocalProfile(profile),
     remove: (id) => void deleteLocalProfile(id),
-    seed: () => void seedLocalProfiles(BUILT_IN),
+    seed: () => void seedLocalProfiles(builtIn(language)),
   };
 }
 

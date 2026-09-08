@@ -11,6 +11,7 @@
  * 24 renders across a full drag instead of 120 a second.
  */
 
+import { useCopy, useLanguage } from "@/lib/i18n";
 import {
   Canvas,
   Group,
@@ -224,18 +225,20 @@ export function Trace({
 function Readout({ slice, at }: { slice: TraceSlice; at: number }) {
   const hour = String(slice.localHours[at]).padStart(2, "0");
   const score = Math.round(slice.scores[at]);
+  const copy = useCopy();
+  const language = useLanguage();
 
   return (
     <View style={styles.readout}>
       <View style={styles.readoutHead}>
         <Text style={styles.hour}>{hour}:00</Text>
-        <Text style={styles.condition}>{conditionLabel(slice.weatherCodes[at])}</Text>
+        <Text style={styles.condition}>{conditionLabel(slice.weatherCodes[at], language)}</Text>
         <Text style={[styles.score, score >= 75 && styles.scoreGood]}>skor {score}</Text>
       </View>
       <View style={styles.values}>
-        <Value label="Sıcaklık" value={`${slice.temperature[at].toFixed(1)}°`} />
-        <Value label="Rüzgâr" value={String(Math.round(slice.wind[at]))} unit="km/h" cool />
-        <Value label="Yağış" value={`%${slice.precipitation[at]}`} />
+        <Value label={copy.measure.temperature} value={`${slice.temperature[at].toFixed(1)}°`} />
+        <Value label={copy.measure.wind} value={String(Math.round(slice.wind[at]))} unit="km/h" cool />
+        <Value label={copy.measure.precipitation} value={`%${slice.precipitation[at]}`} />
         <Value label="UV" value={String(Math.round(slice.uv[at]))} />
       </View>
     </View>

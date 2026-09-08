@@ -14,6 +14,7 @@
  * being paid rather than decoration.
  */
 
+import { useCopy, type Copy } from "@/lib/i18n";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 // expo-router bundles its own copy of React Navigation, so the props type comes from
 // there. Importing `@react-navigation/bottom-tabs` directly would resolve to a package
@@ -29,14 +30,15 @@ const ICON_SIZE = 21;
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
-const TABS: Record<string, { label: string; icon: IconName; active: IconName }> = {
-  index: { label: "İz", icon: "chart-timeline-variant", active: "chart-timeline-variant" },
-  ask: { label: "Sor", icon: "message-outline", active: "message" },
-  you: { label: "Sen", icon: "account-outline", active: "account" },
+const TABS: Record<string, { name: keyof Copy["tabs"]; icon: IconName; active: IconName }> = {
+  index: { name: "trace", icon: "chart-timeline-variant", active: "chart-timeline-variant" },
+  ask: { name: "ask", icon: "message-outline", active: "message" },
+  you: { name: "you", icon: "account-outline", active: "account" },
 };
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const copy = useCopy();
 
   return (
     <View style={[styles.bar, { paddingBottom: insets.bottom, height: BAR_HEIGHT + insets.bottom }]}>
@@ -67,7 +69,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             style={styles.item}
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}
-            accessibilityLabel={tab.label}
+            accessibilityLabel={copy.tabs[tab.name]}
           >
             {/* The burn mark, where the instrument marks anything that matters. */}
             <View style={[styles.mark, focused && styles.markOn]} />
@@ -76,7 +78,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               size={ICON_SIZE}
               color={focused ? colors.burnHi : colors.inkDim}
             />
-            <Text style={[styles.label, focused && styles.labelOn]}>{tab.label}</Text>
+            <Text style={[styles.label, focused && styles.labelOn]}>{copy.tabs[tab.name]}</Text>
           </Pressable>
         );
       })}

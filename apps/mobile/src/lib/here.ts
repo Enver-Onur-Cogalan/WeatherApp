@@ -18,6 +18,7 @@
  *   reconciled through.
  */
 
+import { copyFor, type Language } from "@/lib/i18n";
 import * as Location from "expo-location";
 
 export type Here = {
@@ -44,7 +45,7 @@ export async function permissionState(): Promise<Permission> {
  * app is allowed to ask once. Everything still works — a person types a place name
  * instead, which is what they had to do before this existed.
  */
-export async function locate(ask: boolean): Promise<Here | null> {
+export async function locate(ask: boolean, language: Language): Promise<Here | null> {
   try {
     const existing = await Location.getForegroundPermissionsAsync();
     let granted = existing.status === Location.PermissionStatus.GRANTED;
@@ -62,7 +63,7 @@ export async function locate(ask: boolean): Promise<Here | null> {
 
     const { latitude, longitude } = position.coords;
     return {
-      label: await nameFor(latitude, longitude),
+      label: await nameFor(latitude, longitude, language),
       latitude,
       longitude,
       timezone: deviceTimezone(),
@@ -82,18 +83,23 @@ export async function locate(ask: boolean): Promise<Here | null> {
  * actually returned rather than assuming any field exists — reverse geocoding is
  * inconsistent between platforms and between countries.
  */
-async function nameFor(latitude: number, longitude: number): Promise<string> {
+async function nameFor(
+  latitude: number,
+  longitude: number,
+  language: Language,
+): Promise<string> {
+  const fallback = copyFor(language).places.here;
   try {
     const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
-    if (!place) return "Konumum";
+    if (!place) return fallback;
 
     const near = place.district ?? place.subregion ?? place.city ?? place.region;
     const wider = place.city ?? place.region;
 
     if (near && wider && near !== wider) return `${near}, ${wider}`;
-    return near ?? wider ?? "Konumum";
+    return near ?? wider ?? fallback;
   } catch {
-    return "Konumum";
+    return fallback;
   }
 }
 

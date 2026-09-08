@@ -9,6 +9,7 @@
  * happened to contain, which made the empty state a list of the only things that worked.
  */
 
+import { copyFor, type Copy, type Language } from "@/lib/i18n";
 import type { AskResponse } from "@weatherapp/schema";
 
 import { ApiError, type ErrorKind } from "@/lib/api";
@@ -20,106 +21,68 @@ export type Exchange = {
   id: string;
   question: string;
   response: AskResponse;
+  /** UTC, from the row. The thread groups by the day this falls in locally. */
+  createdAt: string;
 };
 
-/** Openers for the empty screen — the kinds of question İz cannot already answer. */
-export const SUGGESTIONS = [
-  "Bu hafta koşu için en iyi zaman ne zaman?",
-  "Yarın sabah koşabilir miyim?",
-  "Hafta sonu piknik yapmayı düşünüyoruz, ne dersin?",
-];
-
-export const VERDICT_LABELS: Record<NonNullable<Answer["verdict"]>, string> = {
-  good: "Uygun",
-  mixed: "Kısmen",
-  bad: "Uygun değil",
-};
-
-/** "1 araç · 21,4 sn · cihazda" — provenance, which docs/11 requires on screen. */
-export function formatProvenance(response: AskResponse): string {
-  const seconds = (response.duration_ms / 1000).toFixed(1).replace(".", ",");
-  const tools =
-    response.tool_calls.length === 0
-      ? "araç yok"
-      : `${response.tool_calls.length} araç`;
-  const source = response.from_model ? "cihazda" : "motordan";
-  return `${tools} · ${seconds} sn · ${source}`;
+export function verdictLabel(
+  verdict: NonNullable<Answer["verdict"]>,
+  language: Language,
+): string {
+  return copyFor(language).verdict[verdict];
 }
 
-/**
- * A failure, said in the interface's voice.
- *
- * docs/10: errors explain and offer a fix, with no apologies and no vagueness. Each of
- * these names what happened and what would change it, because "bir hata oluştu" tells
- * the person nothing they can act on.
- *
- * The assistant being down is deliberately not phrased as a failure of the app. It is
- * reduced capability — the forecast and the windows still work — and the same table in
- * docs/10 says to say so.
- */
-const MESSAGES: Record<ErrorKind, { title: string; detail: string }> = {
-  unconfigured: {
-    title: "Sunucu adresi tanımlı değil",
-    detail:
-      "EXPO_PUBLIC_API_URL ayarlanmamış ve ödünç alınacak bir geliştirme sunucusu da yok.",
-  },
-  unreachable: {
-    title: "Sunucuya ulaşılamıyor",
-    detail:
-      "Backend çalışıyor mu ve telefon aynı ağda mı, kontrol et. Sonra tekrar dene.",
-  },
-  timeout: {
-    title: "Cevap zamanında gelmedi",
-    detail:
-      "Model cihazda çalışıyor ve yavaşlamış olabilir. Tekrar denemek çoğu zaman yeterli.",
-  },
-  forecast_unavailable: {
-    title: "Tahmin alınamadı",
-    detail:
-      "Sunucu hava tahminine ulaşamadı ve elinde önbelleğe alınmış bir kayıt yok. " +
-      "Birkaç dakika sonra tekrar dene.",
-  },
-  server: {
-    title: "Sunucu hata verdi",
-    detail: "Backend çalışıyor ama isteği tamamlayamadı. Sunucu günlüklerinde ayrıntısı var.",
-  },
-  request: {
-    title: "İstek kabul edilmedi",
-    detail: "Uygulama sunucunun beklemediği bir şey gönderdi. Bu bir uygulama hatası.",
-  },
-  unauthenticated: {
-    title: "Oturum açman gerekiyor",
-    detail:
-      "Bu kısım hesabına bağlı. Sen sekmesinden giriş yap — tahminler ve pencereler " +
-      "hesapsız da çalışmaya devam ediyor.",
-  },
-  contract: {
-    title: "Sunucunun cevabı beklenen biçimde değil",
-    detail:
-      "İstemci ve sunucu şemaları ayrışmış. packages/schema yeniden üretilmeli, " +
-      "iki taraf da güncellenmeli.",
-  },
-};
-
-const UNKNOWN = {
-  title: "Beklenmeyen bir sorun",
-  detail: "Ne olduğunu söyleyemiyoruz. Tekrar denemek bir sonuç vermezse günlüklere bak.",
-};
+/** "1 araç · 21,4 sn · cihazda" — provenance, which docs/11 requires on screen. */
+export function formatProvenance(response: AskResponse, language: Language): string {
+  const { provenance } = copyFor(language).ask;
+  const tools =
+    response.tool_calls.length === 0
+      ? provenance.noTools
+      : provenance.tools(response.tool_calls.length);
+  const source = response.from_model ? provenance.onDevice : provenance.fromEngine;
+  return `${tools} · ${provenance.seconds(response.duration_ms)} · ${source}`;
+}
 
 export type Described = { title: string; detail: string; technical?: string };
 
 /**
- * The `technical` line is the address, the status, or the field that failed.
+ * Every `ErrorKind` has a message, checked here rather than on a device.
  *
- * Added after a device session where the screen said "sunucuya ulaşılamıyor" and the
- * cause — the backend was simply not running — took a round trip of questions to
- * establish. The interface knew which address it had tried and did not say. Naming it
- * turns "check the network" into something a person can actually check, which is what
- * docs/10 means by offering a fix.
+ * The messages moved into `i18n.ts` when the app became bilingual, and an object literal
+ * there knows nothing about this union — a kind added to `api.ts` would have compiled
+ * fine and shown a blank card. This is what says otherwise: it fails to compile if the
+ * dictionary is missing one.
  */
-export function describeError(error: unknown): Described {
-  if (error instanceof ApiError) return { ...MESSAGES[error.kind], technical: error.message };
-  return UNKNOWN;
+type MessagesCoverEveryKind = Copy["failure"] extends Record<ErrorKind, Described>
+  ? true
+  : never;
+const _messagesCoverEveryKind: MessagesCoverEveryKind = true;
+void _messagesCoverEveryKind;
+
+/**
+ * A failure, said in the interface's voice.
+ *
+ * docs/10: errors explain and offer a fix, with no apologies and no vagueness. Each
+ * message names what happened and what would change it, because "bir hata oluştu" tells
+ * the person nothing they can act on. The assistant being down is deliberately not
+ * phrased as a failure of the app — it is reduced capability, since the forecast and the
+ * windows still work, and the same table in docs/10 says to say so.
+ *
+ * The `technical` line is the address, the status, or the field that failed. Added after
+ * a device session where the screen said "sunucuya ulaşılamıyor" and the cause — the
+ * backend was simply not running — took a round trip of questions to establish. The
+ * interface knew which address it had tried and did not say. Naming it turns "check the
+ * network" into something a person can actually check.
+ *
+ * The messages themselves are in `i18n.ts`, keyed by `ErrorKind` so that nothing has to
+ * translate between two vocabularies of failure.
+ */
+export function describeError(error: unknown, language: Language): Described {
+  const messages = copyFor(language).failure;
+  if (error instanceof ApiError) {
+    return { ...messages[error.kind], technical: error.message };
+  }
+  return messages.unknown;
 }
 
 /**
@@ -150,23 +113,27 @@ export function isWorthRetrying(error: unknown): boolean {
  */
 export type Reading = { label: string; value: string; tone?: "warn" | "cool" };
 
-export function readingsOf(window: NonNullable<Answer["best_window"]>): Reading[] {
+export function readingsOf(
+  window: NonNullable<Answer["best_window"]>,
+  language: Language,
+): Reading[] {
+  const copy = copyFor(language);
   const readings: Reading[] = [];
 
   if (window.temp_min_c != null && window.temp_max_c != null) {
     const low = Math.round(window.temp_min_c);
     const high = Math.round(window.temp_max_c);
     readings.push({
-      label: "Sıcaklık",
-      value: low === high ? `${low}°` : `${low}–${high}°`,
+      label: copy.measure.temperature,
+      value: copy.ask.readings.degrees(low, high),
     });
   }
 
   if (window.wind_max_kmh != null) {
     const speed = Math.round(window.wind_max_kmh);
     readings.push({
-      label: "Rüzgâr",
-      value: `${speed} km/sa`,
+      label: copy.measure.wind,
+      value: copy.ask.readings.windValue(speed),
       // Cool rather than a warning: a stiff breeze is information, and the engine already
       // refused to offer a window that broke the person's own limit.
       tone: speed >= 25 ? "cool" : undefined,
@@ -175,8 +142,11 @@ export function readingsOf(window: NonNullable<Answer["best_window"]>): Reading[
 
   if (window.precip_prob_max_pct != null) {
     readings.push({
-      label: "Yağış",
-      value: window.precip_prob_max_pct === 0 ? "yok" : `%${window.precip_prob_max_pct}`,
+      label: copy.measure.precipitation,
+      value:
+        window.precip_prob_max_pct === 0
+          ? copy.ask.readings.precipNone
+          : copy.ask.readings.precipValue(window.precip_prob_max_pct),
       tone: window.precip_prob_max_pct >= 40 ? "cool" : undefined,
     });
   }
