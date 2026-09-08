@@ -6,6 +6,28 @@ Someone who clones this repository should have it running with one command and n
 account anywhere. That constraint drove the choice of a keyless forecast API and a
 local model, and it drives the container topology here.
 
+## Installing on a server
+
+```
+./install.sh                  everything in containers, model included
+./install.sh --host-model     Ollama runs on the host (macOS — ADR-0010)
+```
+
+**`docker compose up` was never actually one command**, and each of the three steps it
+was missing fails in a way that looks like something else. The service refuses to start
+without a `JWT_SECRET` — a Pydantic error inside a lifespan handler, a long way from
+"set this variable". The bundled Ollama starts with no model in it, so `/ready` reports
+the assistant as degraded and every question falls back to the scoring engine. And the
+API has to be told to look at the container rather than the host, which compose cannot
+express per profile: the file carried a comment claiming it did, and nothing did, so
+`--profile bundled` started an Ollama container and then ignored it.
+
+The script does those three things, waits for `/ready` rather than `/health`, and says
+which of the two it got. It is idempotent — run it again to upgrade — and it never
+rewrites a secret it has already written, because regenerating `JWT_SECRET` signs every
+session out and regenerating the database password locks the service out of its own
+volume.
+
 ## Topology
 
 ```
@@ -90,3 +112,21 @@ Verified afterwards on the macOS path, container to host Ollama (ADR-0010): migr
 applied, registration 201, profiles listed, `/plan` 200, and `/ask` answered from the model
 in 36 seconds.
 
+
+## Still open
+
+- **`install.sh` has not been run end to end on a real server.** Its `.env` handling was
+  tested in isolation, including that a second run leaves existing secrets alone, and the
+  container path was verified on macOS against a host Ollama. The Linux bundled path —
+  GPU, model pull, container-to-container — has been reasoned about and not executed.
+- **No TLS, and port 8000 is published on every interface.** That is right for a laptop
+  on a home network and wrong for anything with a public address; a reverse proxy is
+  assumed and not provided. The bundled Ollama is bound to loopback, since an open 11434
+  is an unauthenticated inference endpoint.
+- **Nothing backs up the database volume.** Profiles and places live there, and the
+  handoff from guest to account exists precisely so they survive a phone — surviving the
+  server is a separate promise nobody has made yet.
+- **`ENVIRONMENT` still defaults to `development`.** Nothing reads it in a way that
+  matters yet, which is exactly how it will be wrong the first time something does.
+- **No resource limits.** The model is the largest thing on the machine and nothing
+  stops it competing with Postgres for memory.

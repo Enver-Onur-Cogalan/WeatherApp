@@ -15,10 +15,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://weather:weather@postgres:5432/weather
+      DATABASE_URL: postgresql+asyncpg://weather:${POSTGRES_PASSWORD:-weather}@postgres:5432/weather
       REDIS_URL: redis://redis:6379/0
-      # host.docker.internal reaches the host's Ollama on macOS and Windows.
-      # The bundled profile overrides this to the container.
+      # host.docker.internal reaches the host's Ollama on macOS and Windows. The bundled
+      # profile needs http://ollama:11434 instead, and compose cannot vary one service's
+      # environment by profile — this comment used to claim it was overridden and nothing
+      # did, so `--profile bundled` started an Ollama container and then ignored it.
+      # `install.sh` writes the right value into .env; set it by hand if you run compose
+      # directly.
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e4b}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env — the service will not start without one}
@@ -36,7 +40,9 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: weather
-      POSTGRES_PASSWORD: weather
+      # Defaulted so an existing volume keeps working; `install.sh` generates one for a
+      # fresh server, where a published port and a password of "weather" is not a pair.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-weather}
       POSTGRES_DB: weather
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -62,8 +68,11 @@ services:
   ollama:
     profiles: ["bundled"]
     image: ollama/ollama:latest
+    # Bound to loopback. The bundled profile exists so the model does not have to be
+    # installed on the host, not so it can be reached from off the machine — an open
+    # 11434 is an unauthenticated inference endpoint.
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama-models:/root/.ollama
     healthcheck:
