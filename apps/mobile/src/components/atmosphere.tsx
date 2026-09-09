@@ -620,15 +620,20 @@ export function Atmosphere({
                 <Circle
                   cx={body.x * size.width}
                   cy={body.y * size.height}
-                  r={size.width * (daylight ? 0.085 : 0.05)}
-                  color={daylight ? colors.burn : colors.rule}
+                  r={size.width * (daylight ? 0.085 : 0.045)}
+                  color={daylight ? colors.burn : colors.ruleSoft}
                 />
               </Group>
+              {/* The moon is drawn quieter than the sun rather than paler by accident.
+                  Its path crosses the verdict, and a hard disc in the reading ink
+                  competes with the numerals in front of it — which is the one thing the
+                  far plane may never do (docs/10). A warm sun on a bright sky is already
+                  low contrast; a bone-white moon on a night one is not. */}
               <Circle
                 cx={body.x * size.width}
                 cy={body.y * size.height}
-                r={size.width * (daylight ? 0.042 : 0.028)}
-                color={daylight ? colors.ink : colors.ink2}
+                r={size.width * (daylight ? 0.042 : 0.024)}
+                color={daylight ? colors.ink : colors.inkDim}
               />
             </Group>
           ) : null}
