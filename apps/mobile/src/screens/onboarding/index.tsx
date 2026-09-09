@@ -228,7 +228,11 @@ function Mark({ index, progress }: { index: number; progress: { get: () => numbe
   // animation guidance exempts, because it is out of flow so nothing else re-lays-out,
   // and because `scaleX` would smear the rounded end.
   const fill = useAnimatedStyle(() => {
-    const at = progress.get() - index;
+    // `+ 1` so a mark is full once its own card is reached, rather than once the card
+    // after it is. Without it the first card showed an empty bar and the last showed two
+    // of three filled — the person never saw the third fill, and the segment they were
+    // looking at was always the empty one.
+    const at = progress.get() - index + 1;
     const clamped = at < 0 ? 0 : at > 1 ? 1 : at;
     return { width: `${clamped * 100}%` };
   });

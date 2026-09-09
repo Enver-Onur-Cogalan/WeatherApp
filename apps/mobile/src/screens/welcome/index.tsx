@@ -343,13 +343,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingTop: space.xxl,
     paddingBottom: space.xl,
-    // The name at the top, the choice under the thumb. Everything between is the
-    // argument for making it.
-    justifyContent: "space-between",
     gap: space.xxl,
   },
 
-  masthead: { gap: space.md },
+  /**
+   * Takes the space the buttons do not, and centres itself in it.
+   *
+   * `space-between` on the container was the first version, and on a tall phone it opened
+   * a hand's width of nothing between the wordmark and the first button — the two pieces
+   * of content pinned to opposite ends of a screen with little on it. The choice still
+   * sits under the thumb; the name is now in the middle of what is left rather than
+   * against the top of it.
+   */
+  masthead: { flex: 1, justifyContent: "center", gap: space.md },
   lede: {
     ...type.body,
     fontSize: size.body,
