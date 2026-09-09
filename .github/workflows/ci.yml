@@ -9,9 +9,23 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Run in order rather than all at once, cheapest gate first. It costs wall-clock time —
+# in parallel the whole thing finishes in about a minute, chained it takes four — and it
+# buys two things: no runner minutes are spent building an image for code that does not
+# compile, and a red run has exactly one arrow pointing at it.
+#
+# The order is an argument, not a preference. A leaked credential makes every other result
+# irrelevant, so the scan is first. The schema is the contract both consumers are
+# generated from, so a stale one makes their results untrustworthy rather than merely
+# wrong. Then the two consumers, then the image, then the agent.
+#
+# The cost worth knowing: a chain stops at the first failure, so a run that fails on the
+# API says nothing about the app. Two defects take two pushes to find.
 jobs:
+
   api:
     name: API — lint, types, tests
+    needs: schema
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -63,13 +77,25 @@ jobs:
       # The suite builds its schema from the models, so it cannot notice a migration that
       # disagrees with them. This can: applying every migration to an empty database and
       # then asking Alembic whether anything is still missing.
+      #
+      # Its own database, because "empty" is the whole point and the suite leaves the
+      # other one full. `conftest` runs `create_all` against DATABASE_URL, so by the time
+      # this step ran, `users` already existed and the first migration died on it. The
+      # step had never executed before this repository was pushed, which is how a check
+      # that could not pass sat in the file looking correct.
       - name: Migrations apply, and match the models
+        env:
+          DATABASE_URL: postgresql+asyncpg://weather:weather@localhost:5432/weather_fresh
         run: |
+          PGPASSWORD=weather psql -h localhost -U weather -d postgres \
+            -c 'DROP DATABASE IF EXISTS weather_fresh' \
+            -c 'CREATE DATABASE weather_fresh'
           uv run alembic upgrade head
           uv run alembic check
 
   mobile:
     name: Mobile — types, lint and tests
+    needs: api
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -111,6 +137,7 @@ jobs:
 
   schema:
     name: Schema — generated files are current
+    needs: secrets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -150,6 +177,7 @@ jobs:
 
   evals:
     name: Evals — agent behaviour
+    needs: docker
     runs-on: ubuntu-latest
     # Needs a model, which a hosted runner does not have. docs/08 said this would run on
     # a self-hosted runner or be skipped rather than faked, and skipping is what happens
@@ -171,6 +199,7 @@ jobs:
 
   docker:
     name: Docker — image builds
+    needs: mobile
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
