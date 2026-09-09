@@ -21,6 +21,11 @@ are the ones that clear your limits.*
 | ![İz — the day's comfort trace](docs/screens/iz.png) | ![Seven days as recorder cards](docs/screens/week.png) | ![Sor — the on-device assistant](docs/screens/sor.png) |
 | **İz** — the day, scrubbable hour by hour, with the sky behind it reading the same forecast | **7 gün** — each day burned onto a card from the instrument | **Sor** — the assistant, running on your own hardware, and saying so |
 
+| | |
+|---|---|
+| ![The gate, with the wordmark burnt in](docs/screens/welcome.png) | ![The tour, three cards on a turning drum](docs/screens/tour.png) |
+| **The gate** — the name is scorched onto a recorder card by a travelling point of light, which is what a Campbell–Stokes recorder does with sunshine. There is no weather here on purpose: no place has been chosen yet, and a sky standing for nothing is what [ADR-0013](docs/adr/ADR-0013-data-driven-atmosphere.md) refuses | **The tour** — three cards on a turning drum, each running the real atmosphere on a named specimen. It explains that the line is not temperature, which is the one thing nobody discovers by tapping |
+
 ## Why it is built this way
 
 A weather app that fetches JSON and renders a list demonstrates nothing, so the
