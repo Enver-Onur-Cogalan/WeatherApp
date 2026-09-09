@@ -1,14 +1,27 @@
 # Screens
 
-Four screenshots, referenced from the root `README.md`. Drop them in with exactly these
-names — the table there is already written around them:
+What the README shows, and what to capture if these need retaking.
 
-| File | What it should show |
-|---|---|
-| `iz.png` | İz, on the 24-hour trace, with a finger's worth of scrub so the readout has real values in it. Daytime, so the adaptive ink is visible doing its job. |
-| `week.png` | The 7-day switch, cards on screen. Catch it mid-stagger if you can — the burn arriving is the point of the screen. |
-| `sor.png` | Sor with one answered exchange: the verdict, the window, the readings row, and the provenance line underneath. |
-| `welcome.png` | The gate, on the three-way choice. Not referenced in the table yet; add it when there is a fourth cell worth filling. |
+Six files, and the names matter — the README references them exactly.
 
-Portrait, no status-bar clutter if avoidable, and the device frame is optional — the app
-commits to one dark world and looks better without a white bezel around it.
+| File | Screen | What has to be in the frame |
+|---|---|---|
+| `scrub.gif` | İz, 24 saat | A finger dragging across the trace, so the sky changes with it |
+| `iz.png` | İz, 24 saat | The trace with at least one amber window, the readout, and a sky that is doing something |
+| `week.png` | İz, 7 gün | The calendar cards, several with burns on them |
+| `sor.png` | Sor | One answered question: verdict, window, readings, reason, a warning, and the provenance line |
+| `welcome.png` | The gate | The wordmark, burnt in |
+| `tour.png` | The tour | The storm card, mid-turn if possible |
+
+Two rules for all of them.
+
+**Shoot on a device, not the simulator.** The atmosphere and the burn are the point, and
+the simulator renders Skia differently enough to be worth avoiding.
+
+**Pick an hour when the sky is doing something.** At 03:00 every screenshot is a dark
+rectangle. Late afternoon gives the gradient its burn at the horizon; a forecast with rain
+or snow in it gives the layer something to draw.
+
+`scrub.gif` is converted from a silent screen recording. A GIF rather than an MP4 because
+GitHub does not play a repository-hosted video inline in a README, and a still cannot show
+the one claim this project makes about its own sky.
